@@ -378,7 +378,8 @@ const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid = p => p + Math.random().toString(36).slice(2, 9);
-const baht = (n, d = 0) => '฿' + Number(n || 0).toLocaleString('th-TH', {minimumFractionDigits: d, maximumFractionDigits: d});
+// แสดงยอดตรงกับที่ใช้คำนวณจริง: ถ้ามีเศษสตางค์ แสดง 2 ตำแหน่ง (ยอดใน QR = ยอดบนหน้าจอเสมอ)
+const baht = (n, d) => { const v = Math.round(Number(n || 0) * 100) / 100; const dd = d ?? (Number.isInteger(v) ? 0 : 2); return '฿' + v.toLocaleString('th-TH', {minimumFractionDigits: dd, maximumFractionDigits: dd}); };
 const n2 = n => Number(n || 0).toLocaleString('th-TH', {maximumFractionDigits: 2});
 const round2 = n => Math.round((Number(n) || 0) * 100) / 100;
 const pad = (n, l = 2) => String(n).padStart(l, '0');
@@ -447,7 +448,7 @@ function calcOrder(o) {
    /public/store      ชื่อร้าน / ช่องทางชำระเงิน สำหรับหน้าลูกค้า
    ========================================================= */
 const OWNER_EMAIL = 'taikongseafood.co@gmail.com';
-const COLS = ['customers', 'products', 'orders', 'costs', 'yield_calculations', 'tracking', 'tracking_messages', 'message_templates'];
+const COLS = ['customers', 'products', 'orders', 'costs', 'yield_calculations', 'tracking', 'tracking_messages', 'message_templates', 'trash_orders', 'trash_customers'];
 let DB = null, LASTFLAT = {}, READY = false, USER = null, ONLINE = true, PENDING_REMOTE = false, ROLE = null, ADMINS = {};
 const emailKey = e => String(e || '').trim().toLowerCase().replace(/\./g, ',');
 const isOwner = () => ROLE === 'owner';
@@ -477,6 +478,8 @@ function fromRemote(val) {
   d.counters = p.counters || {};
   COLS.forEach(c => { if (p[c]) d[c] = Object.values(p[c]); });
   if (!p.message_templates) d.message_templates = defaultTemplates();
+  d.trash_orders.forEach(o => { o.items = Object.values(o.items || {}); o._unlinked = Object.values(o._unlinked || {}); });
+  d.trash_customers.forEach(c => { c._unlinked = Object.values(c._unlinked || {}); });
   d.orders.forEach(o => { o.items = Object.values(o.items || {}); o.notes = o.notes || ''; if (!o.public_token) { o.public_token = randToken(); fixed = true; } });
   d.tracking.forEach(t => { t.customer_id = t.customer_id || null; t.order_id = t.order_id || null; t.message_id = t.message_id || null; t.sent_at = t.sent_at || null; });
   d.tracking_messages.forEach(m => { m.tracking_ids = Object.values(m.tracking_ids || {}); m.order_id = m.order_id || null; m.sent_at = m.sent_at || null; });
@@ -628,6 +631,12 @@ function modal(title, body, acts = '') {
   ov.innerHTML = `<div class="modal" role="dialog" aria-label="${esc(title)}"><h3>${esc(title)}</h3>${body}<div class="acts">${acts}<button class="btn" onclick="closeModal()">ปิด</button></div></div>`;
   ov.addEventListener('click', e => { if (e.target === ov) closeModal(); });
   document.body.appendChild(ov); const f = ov.querySelector('input,select,textarea'); if (f) f.focus();
+}
+// ยืนยันแบบพิมพ์คำ (กันกดพลาด)
+function typedConfirm(title, text, word, yesLabel, onYes) {
+  window.__onYes = onYes; window.__word = word;
+  modal(title, `<p style="margin-top:0">${text}</p><label class="f">พิมพ์ <b class="num">${esc(word)}</b> เพื่อยืนยัน<input class="in num" id="tcw" autocomplete="off" oninput="$('#tcyes').disabled=this.value.trim()!==window.__word"></label>`,
+    `<button class="btn danger" id="tcyes" disabled onclick="const f=window.__onYes;closeModal();f()">${yesLabel}</button>`);
 }
 function confirmModal(text, yesLabel, onYes, danger) {
   window.__onYes = onYes;
@@ -956,7 +965,7 @@ function vOrderDetail(o) {
         ${trk.length ? `<div class="stack" style="gap:8px">${trk.map(t => `<div class="row" style="justify-content:space-between"><a class="num" target="_blank" rel="noopener" href="${esc(trackUrl(t.tracking_number))}"><b>${esc(t.tracking_number)}</b> ↗</a>${tPill(t.status)}</div>`).join('')}</div>` : `<div class="small muted">ยังไม่มีเลขพัสดุ</div>`}
         <div class="row" style="margin-top:12px"><button class="btn sm" onclick="addTrackingModal('${o.order_number}')">＋ เพิ่มเลขพัสดุ</button>${trk.some(t => t.status !== 'sent') ? `<button class="btn sm pri" onclick="genMessages(${esc(JSON.stringify(trk.filter(t => t.status !== 'sent').map(t => t.id)))})">✨ สร้างข้อความ</button>` : ''}</div></div>
       <div class="card"><dl class="kv small"><dt>วันที่ออเดอร์</dt><dd>${fmtD(o.order_date)}</dd><dt>สร้างเมื่อ</dt><dd>${fmtDT(o.created_at)}${o.created_by ? ` · ${esc(o.created_by)}` : ''}</dd>${o.updated_by ? `<dt>แก้ไขล่าสุด</dt><dd>${fmtDT(o.updated_at)} · ${esc(o.updated_by)}</dd>` : ''}<dt>การชำระเงิน</dt><dd>${o.payment_status === 'paid' ? '🟢 ชำระแล้ว' : '🟠 ยังไม่ชำระ'}</dd></dl>
-        <div class="row" style="margin-top:14px"><a class="btn sm" href="#/order/${o.order_number}/edit">✏️ แก้ไข</a>${o.status !== 'cancelled' ? `<button class="btn sm danger" onclick="confirmModal('ยกเลิกออเดอร์ ${o.order_number}? เลขออเดอร์จะคงเดิมและไม่ถูกนำไปใช้ซ้ำ','ยกเลิกออเดอร์',()=>setStatus('${o.id}','cancelled'),true)">ยกเลิกออเดอร์</button>` : `<button class="btn sm" onclick="setStatus('${o.id}','waiting')">กู้คืนออเดอร์</button>`}</div></div>
+        <div class="row" style="margin-top:14px"><a class="btn sm" href="#/order/${o.order_number}/edit">✏️ แก้ไข</a><button class="btn sm danger" onclick="deleteOrder('${o.id}')">🗑 ลบ</button>${o.status !== 'cancelled' ? `<button class="btn sm danger" onclick="confirmModal('ยกเลิกออเดอร์ ${o.order_number}? เลขออเดอร์จะคงเดิมและไม่ถูกนำไปใช้ซ้ำ','ยกเลิกออเดอร์',()=>setStatus('${o.id}','cancelled'),true)">ยกเลิกออเดอร์</button>` : `<button class="btn sm" onclick="setStatus('${o.id}','waiting')">กู้คืนออเดอร์</button>`}</div></div>
     </div></div>`;
   return shell('orders', o.order_number, esc(c.name) + ' · ' + fmtD(o.order_date), `<a class="btn" href="#/orders">‹ Orders</a>`, body);
 }
@@ -1145,7 +1154,8 @@ function vCustomer(id) {
       <div class="card"><h3>ประวัติการสั่งซื้อ</h3>${s.orders.length ? `<div class="tw"><table class="t"><tbody>${s.orders.map(o => `<tr class="click" onclick="go('#/order/${o.order_number}')"><td><b class="num">#${o.order_number}</b><div class="small muted">${o.items.map(i => esc(i.product_name.split(' ')[0])).join(', ')}</div></td><td class="small muted num">${fmtD(o.order_date)}</td><td>${pill(o.status)}</td><td class="r num"><b>${baht(o.total)}</b></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">ยังไม่เคยสั่งซื้อ</div>'}</div>
       <div class="stack"><div class="card"><div class="hd"><h3>ข้อมูลติดต่อ</h3><div class="grow"></div><button class="btn sm" onclick="newCustomerModal(false,'${c.id}')">แก้ไข</button></div>
         <dl class="kv small"><dt>ประเภท</dt><dd><span class="tag ${c.customer_type === 'VIP' ? 'or' : 'blue'}">${c.customer_type}</span></dd><dt>โทร</dt><dd>${esc(c.phone)}</dd><dt>LINE</dt><dd>${esc(c.line_contact)}</dd><dt>ที่อยู่</dt><dd>${esc(c.address)}</dd>${c.notes ? `<dt>หมายเหตุ</dt><dd style="color:var(--orange)">${esc(c.notes)}</dd>` : ''}</dl>
-        <button class="btn pri" style="width:100%;margin-top:14px" onclick="F=newDraft();F.customer_id='${c.id}';go('#/order/new')">＋ สร้างออเดอร์ให้ลูกค้านี้</button></div>
+        <button class="btn pri" style="width:100%;margin-top:14px" onclick="F=newDraft();F.customer_id='${c.id}';go('#/order/new')">＋ สร้างออเดอร์ให้ลูกค้านี้</button>
+        <button class="btn sm ghost danger" style="width:100%;margin-top:6px" onclick="deleteCustomer('${c.id}')">🗑 ลบลูกค้า</button></div>
         <div class="card"><h3>สินค้าที่สั่งบ่อย</h3>${favs.length ? favs.map(([k, v]) => `<div class="row small" style="justify-content:space-between;padding:4px 0"><span>${esc(k)}</span><b class="num">${n2(v)} kg</b></div>`).join('') : '<div class="muted small">—</div>'}</div></div>
     </div></div>`;
   return shell('customers', esc(c.name), 'ลูกค้าตั้งแต่ ' + fmtD(c.created_at.slice(0, 10)), `<a class="btn" href="#/customers">‹ Customers</a>`, body);
@@ -1403,6 +1413,7 @@ function vSettings() {
     <div class="card"><h3>รูปแบบข้อความ Tracking</h3><div class="stack" style="gap:12px">${DB.message_templates.map((t, i) => `<div><input class="in" style="max-width:360px;margin-bottom:6px" value="${esc(t.name)}" oninput="DB.message_templates[${i}].name=this.value"><textarea class="in" style="min-height:150px;font-size:14px" oninput="DB.message_templates[${i}].template_text=this.value">${esc(t.template_text)}</textarea></div>`).join('')}</div>
       <p class="small muted">ตัวแปร: {{customer_name}} {{order_number}} {{carrier}} {{tracking_numbers}} {{tracking_count}} {{tracking_url}} · บรรทัดที่ตัวแปรว่าง (เช่น ยังไม่จับคู่ออเดอร์) จะถูกตัดออกให้อัตโนมัติ</p>
       <button class="btn sm" onclick="DB.message_templates.push({id:uid('T'),name:'รูปแบบใหม่',active:true,template_text:'สวัสดีค่ะ คุณ{{customer_name}}\\n\\n{{tracking_numbers}}'});save();render()">＋ เพิ่มรูปแบบ</button></div>
+    ${trashCard()}
     <div class="row"><button class="btn pri lg" onclick="saveSettings()">บันทึกการตั้งค่า</button><div class="grow"></div>
       <button class="btn" onclick="toggleTheme()">🌓 สลับโหมดมืด/สว่าง</button>
       <button class="btn" onclick="backup()">⬇ ดาวน์โหลดข้อมูลสำรอง</button></div>
@@ -1412,6 +1423,56 @@ function vSettings() {
 function saveSettings() {
   $$('[data-p]').forEach(i => { const [a, b] = i.dataset.p.split('.'); const num = ['fee', 'packaging', 'other'].includes(b); DB.settings[a][b] = num ? +i.value : i.value.trim(); });
   save(); toast('บันทึกการตั้งค่าแล้ว');
+}
+/* ---------- ลบ / ถังขยะ ----------
+   ลบ = ย้ายไปถังขยะ (กู้คืนได้) · ลบถาวรได้เฉพาะเจ้าของร้าน · เลขออเดอร์ที่ลบไม่ถูกนำกลับมาใช้ */
+function deleteOrder(id) {
+  const o = DB.orders.find(x => x.id === id); if (!o) return;
+  const nT = DB.tracking.filter(t => t.order_id === o.id).length;
+  typedConfirm('ลบออเดอร์', `ย้าย <b>${o.order_number}</b> ไปถังขยะ?<br><span class="small muted">หายจาก Dashboard/Reports/ประวัติลูกค้า · ลิงก์ใบสรุปที่ส่งให้ลูกค้าจะเปิดไม่ได้${nT ? ` · เลขพัสดุ ${nT} เลขจะกลับเข้า Tracking Inbox` : ''} · กู้คืนได้ที่ Settings → ถังขยะ<br>ถ้าลูกค้ายกเลิกจริง ใช้ "ยกเลิกออเดอร์" แทน</span>`, o.order_number, 'ลบออเดอร์', () => {
+    const now = new Date().toISOString(); const unl = [];
+    DB.tracking.forEach(t => { if (t.order_id === o.id) { unl.push(t.id); touch(t, {order_id:null, message_id:null, sent_at:null, status: t.customer_id ? 'customer_matched' : 'new'}); } });
+    DB.tracking_messages.forEach(m => { if (m.order_id === o.id) m.order_id = null; });
+    DB.orders = DB.orders.filter(x => x.id !== o.id);
+    DB.trash_orders.push({...o, deleted_at:now, deleted_by:USER?.email || '', _unlinked:unl});
+    save(); toast('ย้าย ' + o.order_number + ' ไปถังขยะแล้ว'); go('#/orders');
+  });
+}
+function deleteCustomer(id) {
+  const c = DB.customers.find(x => x.id === id); if (!c) return;
+  const n = DB.orders.filter(o => o.customer_id === id).length, nt = DB.trash_orders.filter(o => o.customer_id === id).length;
+  if (n || nt) return modal('ลบลูกค้าไม่ได้', `<p style="margin-top:0"><b>${esc(c.name)}</b> มีออเดอร์ ${n ? n + ' รายการ' : ''}${nt ? `${n ? ' และ' : ''}ในถังขยะ ${nt} รายการ` : ''}</p><p class="small muted">ออเดอร์เก่าต้องรู้ว่าเป็นของใคร จึงลบลูกค้าที่มีออเดอร์ไม่ได้ · ถ้าข้อมูลผิด กด "แก้ไข" ที่ข้อมูลติดต่อแทน</p>`);
+  confirmModal(`ย้ายลูกค้า <b>${esc(c.name)}</b> ไปถังขยะ? (กู้คืนได้)`, 'ลบลูกค้า', () => {
+    const unl = []; DB.tracking.forEach(t => { if (t.customer_id === id && t.status !== 'sent') { unl.push(t.id); touch(t, {customer_id:null, message_id:null, status:'new'}); } });
+    DB.customers = DB.customers.filter(x => x.id !== id);
+    DB.trash_customers.push({...c, deleted_at:new Date().toISOString(), deleted_by:USER?.email || '', _unlinked:unl});
+    save(); toast('ย้ายลูกค้าไปถังขยะแล้ว'); go('#/customers');
+  }, true);
+}
+function restoreOrder(id) {
+  const o = DB.trash_orders.find(x => x.id === id); if (!o) return;
+  if (!DB.customers.some(c => c.id === o.customer_id)) return toast('กู้ลูกค้าของออเดอร์นี้ก่อน');
+  const {deleted_at, deleted_by, _unlinked, ...rest} = o;
+  (_unlinked || []).forEach(tid => { const t = T_(tid); if (t && !t.order_id && (!t.customer_id || t.customer_id === o.customer_id)) touch(t, {order_id:o.id, customer_id:o.customer_id, status:'order_matched'}); });
+  DB.trash_orders = DB.trash_orders.filter(x => x.id !== id); DB.orders.push(rest);
+  save(); render(); toast('กู้คืน ' + o.order_number + ' แล้ว');
+}
+function restoreCustomer(id) {
+  const c = DB.trash_customers.find(x => x.id === id); if (!c) return;
+  const {deleted_at, deleted_by, _unlinked, ...rest} = c;
+  (_unlinked || []).forEach(tid => { const t = T_(tid); if (t && !t.customer_id) touch(t, {customer_id:c.id, status:'customer_matched'}); });
+  DB.trash_customers = DB.trash_customers.filter(x => x.id !== id); DB.customers.push(rest);
+  save(); render(); toast('กู้คืนลูกค้าแล้ว');
+}
+function purge(col, id) {
+  if (!isOwner()) return toast('ลบถาวรได้เฉพาะเจ้าของร้าน');
+  const r = DB[col].find(x => x.id === id); if (!r) return;
+  confirmModal(`ลบ <b>${esc(r.order_number || r.name)}</b> ถาวร? กู้คืนไม่ได้อีก`, 'ลบถาวร', () => { DB[col] = DB[col].filter(x => x.id !== id); save(); render(); toast('ลบถาวรแล้ว'); }, true);
+}
+function trashCard() {
+  const items = [...DB.trash_orders.map(o => ({col:'trash_orders', id:o.id, label:`🧾 <b class="num">${o.order_number}</b> · ${esc(C(o.customer_id).name)} · ${baht(o.total)}`, at:o.deleted_at, by:o.deleted_by, restore:`restoreOrder('${o.id}')`})),
+    ...DB.trash_customers.map(c => ({col:'trash_customers', id:c.id, label:`👤 <b>${esc(c.name)}</b>`, at:c.deleted_at, by:c.deleted_by, restore:`restoreCustomer('${c.id}')`}))].sort((a, b) => b.at.localeCompare(a.at));
+  return `<div class="card"><h3>ถังขยะ</h3>${items.length ? `<div class="stack" style="gap:8px">${items.map(x => `<div class="row" style="justify-content:space-between;padding:10px 12px;border:1px solid var(--line);border-radius:12px"><span>${x.label}<br><span class="small muted">ลบเมื่อ ${fmtDT(x.at)}${x.by ? ' · ' + esc(x.by) : ''}</span></span><span class="row" style="gap:6px"><button class="btn sm" onclick="${x.restore}">กู้คืน</button>${isOwner() ? `<button class="btn sm danger" onclick="purge('${x.col}','${x.id}')">ลบถาวร</button>` : ''}</span></div>`).join('')}</div>` : '<p class="small muted" style="margin:0">ถังขยะว่าง</p>'}</div>`;
 }
 function usersCard() {
   if (!isOwner()) return `<div class="card"><h3>ผู้ใช้งาน</h3><p class="small muted" style="margin:0">คุณเข้าใช้งานในฐานะผู้ช่วย · การเพิ่มหรือลบผู้ใช้ทำได้เฉพาะเจ้าของร้าน (${esc(OWNER_EMAIL)})</p></div>`;
