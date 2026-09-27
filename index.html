@@ -448,7 +448,9 @@ function calcOrder(o) {
    ========================================================= */
 const OWNER_EMAIL = 'taikongseafood.co@gmail.com';
 const COLS = ['customers', 'products', 'orders', 'costs', 'yield_calculations', 'tracking', 'tracking_messages', 'message_templates'];
-let DB = null, LASTFLAT = {}, READY = false, USER = null, ONLINE = true, PENDING_REMOTE = false;
+let DB = null, LASTFLAT = {}, READY = false, USER = null, ONLINE = true, PENDING_REMOTE = false, ROLE = null, ADMINS = {};
+const emailKey = e => String(e || '').trim().toLowerCase().replace(/\./g, ',');
+const isOwner = () => ROLE === 'owner';
 const randToken = (n = 24) => { const a = new Uint8Array(n); crypto.getRandomValues(a); const c = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'; return [...a].map(x => c[x % c.length]).join(''); };
 const nextId = (pre, list) => { let n = list.length + 1; const has = new Set(list.map(x => x.id)); while (has.has(pre + pad(n, 3))) n++; return pre + pad(n, 3); };
 
@@ -509,6 +511,7 @@ function save() {
   if (Object.keys(up).length) Backend.update(up).catch(e => { console.error(e); toast('บันทึกไม่สำเร็จ: ' + (e.code || e.message)); });
 }
 function onRemote(val) {
+  if (!USER) return;                                                            // ออกจากระบบแล้ว ไม่รับข้อมูลที่ค้างมา
   const {d, fixed} = fromRemote(val); const first = !READY;
   const prevFlat = LASTFLAT; DB = d; READY = true; LASTFLAT = toFlat();
   if (!val || !val.private || !val.private.meta) { LASTFLAT = {}; save(); }      // ครั้งแรก: สร้างค่าเริ่มต้น (ข้อมูลว่าง)
@@ -538,6 +541,8 @@ const Backend = window.__FAKE_BACKEND || (() => {
     listen: (cb, err) => { const r = db.ref(); const h = r.child('private').on('value', s => cb({private:s.val()}), err); return () => r.child('private').off('value', h); },
     update: up => db.ref().update(up),
     tx: (path, fn) => db.ref(path).transaction(fn).then(r => { if (!r.committed) throw new Error('tx'); return r.snapshot.val(); }),
+    get: p => db.ref(p).get().then(s => s.val()),
+    on: (p, cb, err) => { const r = db.ref(p); const h = r.on('value', s => cb(s.val()), err); return () => r.off('value', h); },
     getPublic: async token => { const [o, s] = await Promise.all([db.ref('public/orders/' + token).get(), db.ref('public/store').get()]); return {order:o.val(), store:s.val()}; },
     onConnected: cb => db.ref('.info/connected').on('value', s => cb(!!s.val())),
   };
@@ -658,7 +663,7 @@ function shell(active, title, sub, actions, body) {
     <a class="brand" href="#/dashboard" aria-label="กลับหน้าแรก">${logoMark()}<div><b>${esc(DB.settings.store.name_en || 'TAIKONG SEAFOOD')}</b><small>${esc(DB.settings.store.name)} · หลังบ้าน</small></div></a>
     <nav class="nav">${NAV.map(([k, ic, l]) => `<a href="#/${k}" class="${active === k ? 'on' : ''}"><span class="ic">${ic}</span>${l}${k === 'orders' && waiting ? `<span class="badge">${waiting}</span>` : ''}</a>`).join('')}</nav>
     <div class="side-foot"><div class="row" style="gap:6px;flex-wrap:nowrap"><span class="dot-s" style="background:${ONLINE ? '#12925B' : '#E07A12'}"></span><span>${ONLINE ? 'ออนไลน์ · บันทึกอัตโนมัติ' : 'ออฟไลน์ · จะบันทึกเมื่อกลับมาออนไลน์'}</span></div>
-      <div style="margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(USER?.email || '')}</div><button class="btn sm" style="margin-top:8px;width:100%;background:transparent;color:#C4D4E8;border-color:rgba(255,255,255,.15)" onclick="logout()">ออกจากระบบ</button></div>
+      <div style="margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(USER?.email || '')}">${isOwner() ? '👑 เจ้าของร้าน' : '👤 ผู้ช่วย'} · ${esc(USER?.email || '')}</div><button class="btn sm" style="margin-top:8px;width:100%;background:transparent;color:#C4D4E8;border-color:rgba(255,255,255,.15)" onclick="logout()">ออกจากระบบ</button></div>
   </aside>
   <main class="main">
     <div class="top"><div><h1>${title}</h1>${sub ? `<div class="sub">${sub}</div>` : ''}</div><div class="grow"></div>${actions || ''}</div>
@@ -904,11 +909,11 @@ async function saveOrder() {
   let o; const isNew = !F.id; SAVING = true;
   if (F.id) {
     o = DB.orders.find(x => x.id === F.id);
-    Object.assign(o, {customer_id:F.customer_id, order_date:F.order_date, boxes:+F.boxes || 1, items, shipping_fee:+F.shipping_fee, discount:+F.discount, packaging_cost:+F.packaging_cost, other_cost:+F.other_cost, notes:F.notes, updated_at:new Date().toISOString()});
+    Object.assign(o, {updated_by:USER?.email || '', customer_id:F.customer_id, order_date:F.order_date, boxes:+F.boxes || 1, items, shipping_fee:+F.shipping_fee, discount:+F.discount, packaging_cost:+F.packaging_cost, other_cost:+F.other_cost, notes:F.notes, updated_at:new Date().toISOString()});
     calcOrder(o);
   } else {
     let num; try { num = await allocOrderNumber(); } catch (e) { SAVING = false; return toast('ออกเลขออเดอร์ไม่สำเร็จ ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่'); }
-    o = calcOrder({id:uid('O'), order_number:num, public_token:randToken(), customer_id:F.customer_id, order_date:F.order_date, boxes:+F.boxes || 1, status:'waiting', payment_status:'unpaid', items,
+    o = calcOrder({id:uid('O'), order_number:num, public_token:randToken(), created_by:USER?.email || '', customer_id:F.customer_id, order_date:F.order_date, boxes:+F.boxes || 1, status:'waiting', payment_status:'unpaid', items,
       shipping_fee:+F.shipping_fee, discount:+F.discount, packaging_cost:+F.packaging_cost, other_cost:+F.other_cost, notes:F.notes, created_at:new Date().toISOString(), updated_at:new Date().toISOString()});
     DB.orders.push(o);
   }
@@ -950,7 +955,7 @@ function vOrderDetail(o) {
       <div class="card"><div class="hd"><h3>Tracking</h3><div class="grow"></div><span class="small muted">${trk.length} เลข</span></div>
         ${trk.length ? `<div class="stack" style="gap:8px">${trk.map(t => `<div class="row" style="justify-content:space-between"><a class="num" target="_blank" rel="noopener" href="${esc(trackUrl(t.tracking_number))}"><b>${esc(t.tracking_number)}</b> ↗</a>${tPill(t.status)}</div>`).join('')}</div>` : `<div class="small muted">ยังไม่มีเลขพัสดุ</div>`}
         <div class="row" style="margin-top:12px"><button class="btn sm" onclick="addTrackingModal('${o.order_number}')">＋ เพิ่มเลขพัสดุ</button>${trk.some(t => t.status !== 'sent') ? `<button class="btn sm pri" onclick="genMessages(${esc(JSON.stringify(trk.filter(t => t.status !== 'sent').map(t => t.id)))})">✨ สร้างข้อความ</button>` : ''}</div></div>
-      <div class="card"><dl class="kv small"><dt>วันที่ออเดอร์</dt><dd>${fmtD(o.order_date)}</dd><dt>สร้างเมื่อ</dt><dd>${fmtDT(o.created_at)}</dd><dt>การชำระเงิน</dt><dd>${o.payment_status === 'paid' ? '🟢 ชำระแล้ว' : '🟠 ยังไม่ชำระ'}</dd></dl>
+      <div class="card"><dl class="kv small"><dt>วันที่ออเดอร์</dt><dd>${fmtD(o.order_date)}</dd><dt>สร้างเมื่อ</dt><dd>${fmtDT(o.created_at)}${o.created_by ? ` · ${esc(o.created_by)}` : ''}</dd>${o.updated_by ? `<dt>แก้ไขล่าสุด</dt><dd>${fmtDT(o.updated_at)} · ${esc(o.updated_by)}</dd>` : ''}<dt>การชำระเงิน</dt><dd>${o.payment_status === 'paid' ? '🟢 ชำระแล้ว' : '🟠 ยังไม่ชำระ'}</dd></dl>
         <div class="row" style="margin-top:14px"><a class="btn sm" href="#/order/${o.order_number}/edit">✏️ แก้ไข</a>${o.status !== 'cancelled' ? `<button class="btn sm danger" onclick="confirmModal('ยกเลิกออเดอร์ ${o.order_number}? เลขออเดอร์จะคงเดิมและไม่ถูกนำไปใช้ซ้ำ','ยกเลิกออเดอร์',()=>setStatus('${o.id}','cancelled'),true)">ยกเลิกออเดอร์</button>` : `<button class="btn sm" onclick="setStatus('${o.id}','waiting')">กู้คืนออเดอร์</button>`}</div></div>
     </div></div>`;
   return shell('orders', o.order_number, esc(c.name) + ' · ' + fmtD(o.order_date), `<a class="btn" href="#/orders">‹ Orders</a>`, body);
@@ -1382,6 +1387,7 @@ function vReports() {
 function vSettings() {
   const s = DB.settings; const f = (path, l, ph = '') => { const [a, b] = path.split('.'); return `<label class="f">${l}<input class="in" data-p="${path}" value="${esc(s[a][b])}" placeholder="${ph}"></label>`; };
   const body = `<div class="stack">
+    ${usersCard()}
     <div class="card"><h3>ข้อมูลร้าน</h3>
       <div class="row" style="margin-bottom:14px;flex-wrap:nowrap">${logoMark().replace('brand-mark', 'brand-mark" style="width:64px;height:64px;font-size:32px;border-radius:16px')}<div class="stack" style="gap:6px"><b class="small">โลโก้ร้าน</b><div class="row"><label class="btn sm">อัปโหลดโลโก้<input type="file" accept="image/*" hidden onchange="logoUpload(this)"></label>${s.store.logo ? `<button class="btn sm danger" onclick="DB.settings.store.logo='';save();render()">ลบโลโก้</button>` : ''}</div><span class="small muted">ใช้ในเมนูหลังบ้านและหน้าสรุปออเดอร์ของลูกค้า · รูปสี่เหลี่ยมจัตุรัสดีที่สุด</span></div></div>
       <div class="fgrid">${f('store.name_en', 'ชื่อร้าน (อังกฤษ)')}${f('store.name', 'ชื่อร้าน')}${f('store.phone', 'เบอร์โทร')}${f('store.line', 'LINE')}${f('store.address', 'ที่อยู่')}</div></div>
@@ -1406,6 +1412,30 @@ function vSettings() {
 function saveSettings() {
   $$('[data-p]').forEach(i => { const [a, b] = i.dataset.p.split('.'); const num = ['fee', 'packaging', 'other'].includes(b); DB.settings[a][b] = num ? +i.value : i.value.trim(); });
   save(); toast('บันทึกการตั้งค่าแล้ว');
+}
+function usersCard() {
+  if (!isOwner()) return `<div class="card"><h3>ผู้ใช้งาน</h3><p class="small muted" style="margin:0">คุณเข้าใช้งานในฐานะผู้ช่วย · การเพิ่มหรือลบผู้ใช้ทำได้เฉพาะเจ้าของร้าน (${esc(OWNER_EMAIL)})</p></div>`;
+  const list = Object.entries(ADMINS).sort((a, b) => (a[1].added_at || '').localeCompare(b[1].added_at || ''));
+  return `<div class="card"><h3>ผู้ใช้งาน</h3>
+    <div class="stack" style="gap:8px">
+      <div class="row" style="justify-content:space-between;padding:10px 12px;background:var(--surface-2);border-radius:12px"><span>👑 <b>${esc(OWNER_EMAIL)}</b> <span class="tag or">เจ้าของร้าน</span></span></div>
+      ${list.map(([k, a]) => `<div class="row" style="justify-content:space-between;padding:10px 12px;border:1px solid var(--line);border-radius:12px"><span>👤 <b>${esc(a.email)}</b> <span class="tag blue">ผู้ช่วย</span><br><span class="small muted">เพิ่มเมื่อ ${a.added_at ? fmtDT(a.added_at) : '-'}</span></span><button class="btn sm danger" onclick="removeAdmin('${k}')">เอาออก</button></div>`).join('')}
+    </div>
+    <div class="row" style="margin-top:14px;flex-wrap:nowrap"><input class="in" id="newadmin" type="email" inputmode="email" autocomplete="off" placeholder="อีเมล Google ของผู้ช่วย เช่น name@gmail.com" onkeydown="if(event.key==='Enter')addAdmin()"><button class="btn pri" onclick="addAdmin()">＋ เพิ่มผู้ช่วย</button></div>
+    <p class="small muted" style="margin-bottom:0">ผู้ช่วยเห็นและแก้ไขข้อมูลได้ทุกอย่าง ยกเว้นการจัดการผู้ใช้ · เอาออกแล้วจะถูกออกจากระบบทันที · แนะนำให้ผู้ช่วยเปิด 2-Step Verification ในบัญชี Google ด้วย</p></div>`;
+}
+async function addAdmin() {
+  const e = ($('#newadmin').value || '').trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return toast('อีเมลไม่ถูกต้อง');
+  if (e === OWNER_EMAIL) return toast('อีเมลนี้เป็นเจ้าของร้านอยู่แล้ว');
+  if (ADMINS[emailKey(e)]) return toast('มีผู้ใช้นี้อยู่แล้ว');
+  try { await Backend.update({['admins/' + emailKey(e)]:{email:e, added_at:new Date().toISOString(), added_by:USER.email}}); toast('เพิ่ม ' + e + ' แล้ว · ให้เขาเปิดลิงก์เดียวกันแล้วล็อกอินด้วย Google'); }
+  catch (err) { toast('เพิ่มไม่สำเร็จ: ' + (err.code || err.message)); }
+}
+function removeAdmin(k) {
+  const a = ADMINS[k]; if (!a) return;
+  confirmModal(`เอา <b>${esc(a.email)}</b> ออกจากระบบ? เขาจะเข้าใช้งานไม่ได้ทันที`, 'เอาออก', async () => {
+    try { await Backend.update({['admins/' + k]:null}); toast('เอาออกแล้ว'); } catch (err) { toast('ไม่สำเร็จ: ' + (err.code || err.message)); } }, true);
 }
 function backup() {
   const data = JSON.stringify({exported_at:new Date().toISOString(), ...DB}, null, 1);
@@ -1634,7 +1664,7 @@ const IDLE_MS = 30 * 60 * 1000; let STOP = null, AUTHSTATE = 'loading', AUTHERR 
 function authScreen() {
   const s = AUTHSTATE;
   const body = s === 'loading' ? '<p class="muted">กำลังตรวจสอบการเข้าสู่ระบบ…</p>'
-    : s === 'denied' ? `<p>บัญชี <b>${esc(AUTHERR)}</b> ไม่มีสิทธิ์เข้าหลังบ้าน</p><button class="btn lg" style="width:100%" onclick="Backend.signOut()">ใช้บัญชีอื่น</button>`
+    : s === 'denied' ? `<p>บัญชี <b>${esc(AUTHERR)}</b> ไม่มีสิทธิ์เข้าหลังบ้าน</p><p class="small muted">ถ้าคุณเป็นผู้ช่วย ขอให้เจ้าของร้านเพิ่มอีเมลนี้ใน Settings → ผู้ใช้งาน</p><button class="btn lg" style="width:100%" onclick="Backend.signOut()">ใช้บัญชีอื่น</button>`
     : s === 'syncing' ? '<p class="muted">กำลังโหลดข้อมูลร้าน…</p>'
     : `<p class="muted" style="margin-top:0">สำหรับเจ้าของร้านเท่านั้น</p><button class="btn pri lg" style="width:100%" onclick="login()"><svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#fff" d="M44.5 20H24v8.5h11.8C34.7 33.9 30.1 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2 11.8 2 2 11.8 2 24s9.8 22 22 22c11 0 21-8 21-22 0-1.3-.2-2.7-.5-4z"/></svg> เข้าสู่ระบบด้วย Google</button>${AUTHERR ? `<p class="small" style="color:var(--red);margin-top:12px">${esc(AUTHERR)}</p>` : ''}`;
   return `<div class="login"><div class="login-card"><div class="brand-mark" style="width:56px;height:56px;font-size:30px;border-radius:16px;margin:0 auto 14px">🦐</div><h1>TAIKONG SEAFOOD</h1><div class="muted small" style="margin-bottom:22px">ไต้ก๋ง ซีฟู้ด · หลังบ้าน</div>${body}</div><p class="small muted" style="text-align:center;margin-top:16px">🔒 ข้อมูลเข้ารหัสระหว่างส่ง และอ่านได้เฉพาะบัญชีเจ้าของร้าน</p></div>`;
@@ -1654,12 +1684,24 @@ function boot() {
   if (token) return renderPublicToken(token);           // หน้าลูกค้า: ไม่ต้องล็อกอิน อ่านได้เฉพาะออเดอร์ของ token นี้
   render();
   Backend.onConnected && Backend.onConnected(on => { const ch = on !== ONLINE; ONLINE = on; if (ch && READY) render(); });
-  Backend.onAuth(u => {
-    if (STOP) { STOP(); STOP = null; } READY = false; DB = null; LASTFLAT = {};
+  let stopRole = null;
+  Backend.onAuth(async u => {
+    if (STOP) { STOP(); STOP = null; } if (stopRole) { stopRole(); stopRole = null; }
+    READY = false; DB = null; LASTFLAT = {}; ROLE = null; ADMINS = {};
     if (!u) { USER = null; AUTHSTATE = 'signedout'; return render(); }
-    if (u.email !== OWNER_EMAIL || !u.emailVerified) { USER = null; AUTHSTATE = 'denied'; AUTHERR = u.email || ''; return render(); }
+    const email = (u.email || '').toLowerCase();
+    if (!u.emailVerified) { USER = null; AUTHSTATE = 'denied'; AUTHERR = email; return render(); }
+    if (email === OWNER_EMAIL) ROLE = 'owner';
+    else { AUTHSTATE = 'loading'; render();
+      let rec = null; try { rec = await Backend.get('admins/' + emailKey(email)); } catch (e) {}
+      if (!rec) { USER = null; AUTHSTATE = 'denied'; AUTHERR = email; return render(); }
+      ROLE = 'staff'; }
     if (idleExpired()) { AUTHERR = 'ล็อกอัตโนมัติ เพราะไม่ได้ใช้งานเกิน 30 นาที'; return logout(); }
     USER = u; markActive(); AUTHSTATE = 'syncing'; render();
+    // เจ้าของร้าน: ดูรายชื่อผู้ช่วย · ผู้ช่วย: ถ้าถูกเอาออก → ออกจากระบบทันที
+    stopRole = ROLE === 'owner'
+      ? Backend.on('admins', v => { ADMINS = v || {}; if (READY && location.hash.startsWith('#/settings')) render(); })
+      : Backend.on('admins/' + emailKey(email), v => { if (!v) { AUTHERR = 'สิทธิ์การเข้าใช้งานของคุณถูกยกเลิกแล้ว'; logout(); } }, () => logout());
     STOP = Backend.listen(onRemote, e => { AUTHSTATE = 'signedout'; AUTHERR = 'อ่านข้อมูลไม่ได้ (' + (e.code || e.message) + ') ตรวจสอบ Security Rules'; USER = null; render(); });
   });
 }
