@@ -307,6 +307,61 @@ ol.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;c
 .login-card{background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:32px 24px;text-align:center;box-shadow:var(--shadow)}
 .login-card h1{font-family:var(--display);font-size:22px;margin:0;letter-spacing:.04em}
 .dot-s{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}
+/* =========================================================
+   RESPONSIVE v2 — มือถือ (<600) · แท็บเล็ตแนวตั้ง (600–860) · แท็บเล็ตแนวนอน/โน้ตบุ๊กเล็ก (861–1180) · เดสก์ท็อป (>1180)
+   ========================================================= */
+.grid>*,.stack>*{min-width:0}
+.card .hd{flex-wrap:wrap}
+.in,select.in,textarea.in{font-size:16px}
+.main{margin:0 auto;max-width:1440px}
+.show-m{display:none}
+.sf-ic{display:none}
+/* แท็บเล็ตแนวนอน: เมนูข้างเป็นไอคอน เพิ่มพื้นที่เนื้อหา */
+@media (min-width:861px) and (max-width:1180px){
+  .app{grid-template-columns:76px 1fr;background:linear-gradient(90deg,var(--navy) 76px,transparent 76px)}
+  .side{padding:18px 10px}
+  .brand{justify-content:center;padding:4px 0 18px}.brand>div:last-child{display:none}
+  .nav a{justify-content:center;padding:12px 0;font-size:0;position:relative}
+  .nav a .ic{font-size:20px;width:auto}
+  .nav .badge{position:absolute;top:3px;right:6px;margin:0;font-size:10px;line-height:16px;padding:0 5px}
+  .side-foot{padding:10px 0;text-align:center}.side-foot .sf-hide{display:none!important}.sf-ic{display:inline}
+  .side-foot .dot-s{margin:0 auto}
+  .main{padding:24px 24px 60px}
+  .selbar{left:calc(50% + 38px)!important}
+  #dashrow{grid-template-columns:1fr!important}
+}
+@media (min-width:960px) and (max-width:1180px){.today{grid-template-columns:1.1fr 1fr}}
+/* แท็บเล็ตแนวตั้ง */
+@media (min-width:600px) and (max-width:860px){
+  .main{padding:20px 24px calc(100px + env(safe-area-inset-bottom,0px))}
+  .tasks{display:grid;grid-template-columns:1fr 1fr}
+  .today h2{font-size:28px}
+  .g2{grid-template-columns:1fr 1fr}
+  .mnav{padding-left:max(6px,calc(50% - 300px));padding-right:max(6px,calc(50% - 300px))}
+}
+/* มือถือและแท็บเล็ตแนวตั้ง */
+@media (max-width:860px){
+  .show-m{display:block}.hide-m{display:none!important}
+  .g3:has(>.kpi){grid-template-columns:1fr 1fr}
+  .stepper{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch}
+  .stepper button{flex:0 0 auto;min-width:0;padding:10px 14px}
+  .t.oi thead{display:none}.t.oi td{padding:10px 4px}
+  .ptool .seg{order:5}
+}
+@media (max-width:599px){
+  .hide-s{display:none!important}
+  .kpi .v{font-size:22px}
+  .top .btn{min-height:40px}
+}
+/* จอสัมผัส: ปุ่มใหญ่พอสำหรับนิ้ว (≥ 38–44px) */
+@media (pointer:coarse){
+  .btn{min-height:44px}.btn.sm{min-height:38px;padding:6px 12px}
+  .seg button{min-height:38px;padding:6px 14px}
+  .ck{width:22px;height:22px}
+  .item .x{min-width:44px;min-height:44px}
+  .in,select.in,textarea.in{font-size:16px!important}
+  .task{padding:14px 16px}
+}
 .sheet{position:fixed;inset:auto 0 0 0;background:var(--surface);border-radius:20px 20px 0 0;padding:16px 16px calc(20px + env(safe-area-inset-bottom,0px));z-index:55;display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .sheet a{display:flex;flex-direction:column;align-items:center;gap:4px;padding:14px 6px;border-radius:14px;background:var(--surface-2);text-decoration:none;color:var(--ink);font-size:13px}
 .sheet a .ic{font-size:22px}
@@ -670,9 +725,9 @@ function shell(active, title, sub, actions, body) {
   return `<div class="app">
   <aside class="side">
     <a class="brand" href="#/dashboard" aria-label="กลับหน้าแรก">${logoMark()}<div><b>${esc(DB.settings.store.name_en || 'TAIKONG SEAFOOD')}</b><small>${esc(DB.settings.store.name)} · หลังบ้าน</small></div></a>
-    <nav class="nav">${NAV.map(([k, ic, l]) => `<a href="#/${k}" class="${active === k ? 'on' : ''}"><span class="ic">${ic}</span>${l}${k === 'orders' && waiting ? `<span class="badge">${waiting}</span>` : ''}</a>`).join('')}</nav>
-    <div class="side-foot"><div class="row" style="gap:6px;flex-wrap:nowrap"><span class="dot-s" style="background:${ONLINE ? '#12925B' : '#E07A12'}"></span><span>${ONLINE ? 'ออนไลน์ · บันทึกอัตโนมัติ' : 'ออฟไลน์ · จะบันทึกเมื่อกลับมาออนไลน์'}</span></div>
-      <div style="margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(USER?.email || '')}">${isOwner() ? '👑 เจ้าของร้าน' : '👤 ผู้ช่วย'} · ${esc(USER?.email || '')}</div><button class="btn sm" style="margin-top:8px;width:100%;background:transparent;color:#C4D4E8;border-color:rgba(255,255,255,.15)" onclick="logout()">ออกจากระบบ</button></div>
+    <nav class="nav">${NAV.map(([k, ic, l]) => `<a href="#/${k}" title="${l}" class="${active === k ? 'on' : ''}"><span class="ic">${ic}</span>${l}${k === 'orders' && waiting ? `<span class="badge">${waiting}</span>` : ''}</a>`).join('')}</nav>
+    <div class="side-foot"><div class="row sf-hide" style="gap:6px;flex-wrap:nowrap"><span class="dot-s" style="background:${ONLINE ? '#12925B' : '#E07A12'}"></span><span>${ONLINE ? 'ออนไลน์ · บันทึกอัตโนมัติ' : 'ออฟไลน์ · จะบันทึกเมื่อกลับมาออนไลน์'}</span></div>
+      <div class="sf-hide" style="margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(USER?.email || '')}">${isOwner() ? '👑 เจ้าของร้าน' : '👤 ผู้ช่วย'} · ${esc(USER?.email || '')}</div><button class="btn sm sf-out" title="ออกจากระบบ" style="margin-top:8px;width:100%;background:transparent;color:#C4D4E8;border-color:rgba(255,255,255,.15)" onclick="logout()"><span class="sf-ic">🔒</span><span class="sf-hide">ออกจากระบบ</span></button></div>
   </aside>
   <main class="main">
     <div class="top"><div><h1>${title}</h1>${sub ? `<div class="sub">${sub}</div>` : ''}</div><div class="grow"></div>${actions || ''}</div>
@@ -942,8 +997,8 @@ function vOrderDetail(o) {
         ${o.status === 'cancelled' ? '<div class="note">ออเดอร์นี้ถูกยกเลิก ไม่นับในยอดขายและกำไร</div>' : `<div class="stepper">${flow.map((s, i) => `<button class="${i < idx ? 'done' : i === idx ? 'cur' : ''}" onclick="setStatus('${o.id}','${s.id}')">${s.label}</button>`).join('')}</div>
         ${next ? `<button class="btn pri lg" style="width:100%;margin-top:14px" onclick="${next[0] === '__track' ? `addTrackingModal('${o.order_number}')` : `setStatus('${o.id}','${next[0]}')`}">${next[1]}</button>` : ''}`}
       </div>
-      <div class="card"><h3>รายการสินค้า</h3><div class="tw"><table class="t"><thead><tr><th>สินค้า</th><th class="r">จำนวน</th><th class="r">ราคา/kg</th><th class="r">รวม</th><th class="r">ต้นทุน</th><th class="r">กำไร</th></tr></thead><tbody>
-        ${o.items.map(i => `<tr><td>${esc(i.product_name)}<div class="small muted">ราคา ${i.price_tier}${i.selling_price !== i.original_price ? ` · <span style="color:var(--orange)">แก้จาก ${baht(i.original_price)}</span>` : ''}</div></td><td class="r num">${n2(i.quantity)} ${i.unit}</td><td class="r num">${baht(i.selling_price)}</td><td class="r num">${baht(i.revenue)}</td><td class="r num muted">${baht(i.cost)}</td><td class="r num" style="color:var(--blue)">${baht(i.profit)}</td></tr>`).join('')}
+      <div class="card"><h3>รายการสินค้า</h3><div class="tw"><table class="t oi"><thead><tr><th>สินค้า</th><th class="r hide-m">จำนวน</th><th class="r hide-m">ราคา/kg</th><th class="r">รวม</th><th class="r hide-m">ต้นทุน</th><th class="r hide-m">กำไร</th></tr></thead><tbody>
+        ${o.items.map(i => `<tr><td>${esc(i.product_name)}<div class="small muted show-m num">${n2(i.quantity)} ${i.unit} × ${baht(i.selling_price)}</div><div class="small muted">ราคา ${i.price_tier}${i.selling_price !== i.original_price ? ` · <span style="color:var(--orange)">แก้จาก ${baht(i.original_price)}</span>` : ''}</div></td><td class="r num hide-m">${n2(i.quantity)} ${i.unit}</td><td class="r num hide-m">${baht(i.selling_price)}</td><td class="r num"><b>${baht(i.revenue)}</b></td><td class="r num muted hide-m">${baht(i.cost)}</td><td class="r num hide-m" style="color:var(--blue)">${baht(i.profit)}</td></tr>`).join('')}
       </tbody></table></div>
         <div class="grid g2" style="margin-top:16px">
           <div class="totals"><div class="ln"><span>ค่าสินค้า</span><span class="num">${baht(o.subtotal)}</span></div><div class="ln"><span>ค่าส่ง</span><span class="num">${baht(o.shipping_fee)}</span></div>${o.discount ? `<div class="ln"><span>ส่วนลด</span><span class="num">−${baht(o.discount)}</span></div>` : ''}<div class="ln big"><span>ยอดรวม</span><span class="num">${baht(o.total)}</span></div></div>
@@ -1151,7 +1206,7 @@ function vCustomer(id) {
     <div class="card kpi"><div class="k">เฉลี่ยต่อออเดอร์</div><div class="v num">${baht(avg)}</div></div>
     <div class="card kpi"><div class="k">สั่งล่าสุด</div><div class="v" style="font-size:20px">${s.last ? fmtD(s.last) : '—'}</div></div></div>
     <div class="grid" style="grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);align-items:start" id="cgrid">
-      <div class="card"><h3>ประวัติการสั่งซื้อ</h3>${s.orders.length ? `<div class="tw"><table class="t"><tbody>${s.orders.map(o => `<tr class="click" onclick="go('#/order/${o.order_number}')"><td><b class="num">#${o.order_number}</b><div class="small muted">${o.items.map(i => esc(i.product_name.split(' ')[0])).join(', ')}</div></td><td class="small muted num">${fmtD(o.order_date)}</td><td>${pill(o.status)}</td><td class="r num"><b>${baht(o.total)}</b></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">ยังไม่เคยสั่งซื้อ</div>'}</div>
+      <div class="card"><h3>ประวัติการสั่งซื้อ</h3>${s.orders.length ? `<div class="tw"><table class="t cards"><tbody>${s.orders.map(o => `<tr class="click" onclick="go('#/order/${o.order_number}')"><td><b class="num">#${o.order_number}</b><div class="small muted">${o.items.map(i => esc(i.product_name.split(' ')[0])).join(', ')}</div></td><td class="small muted num">${fmtD(o.order_date)}</td><td>${pill(o.status)}</td><td class="r num"><b>${baht(o.total)}</b></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">ยังไม่เคยสั่งซื้อ</div>'}</div>
       <div class="stack"><div class="card"><div class="hd"><h3>ข้อมูลติดต่อ</h3><div class="grow"></div><button class="btn sm" onclick="newCustomerModal(false,'${c.id}')">แก้ไข</button></div>
         <dl class="kv small"><dt>ประเภท</dt><dd><span class="tag ${c.customer_type === 'VIP' ? 'or' : 'blue'}">${c.customer_type}</span></dd><dt>โทร</dt><dd>${esc(c.phone)}</dd><dt>LINE</dt><dd>${esc(c.line_contact)}</dd><dt>ที่อยู่</dt><dd>${esc(c.address)}</dd>${c.notes ? `<dt>หมายเหตุ</dt><dd style="color:var(--orange)">${esc(c.notes)}</dd>` : ''}</dl>
         <button class="btn pri" style="width:100%;margin-top:14px" onclick="F=newDraft();F.customer_id='${c.id}';go('#/order/new')">＋ สร้างออเดอร์ให้ลูกค้านี้</button>
@@ -1211,7 +1266,7 @@ function vTracking(q) {
       <div class="row" style="margin-top:10px;flex-wrap:nowrap"><select class="in" style="max-width:200px" onchange="TI.carrier=this.value">${['Inter Express', 'Other'].map(c => `<option ${c === carrier ? 'selected' : ''}>${c}</option>`).join('')}</select>
       <button class="btn pri" style="flex:1" onclick="pasteToInbox()">＋ เพิ่มเข้า Inbox</button></div>
     </div>
-    <div class="card"><h3>ขั้นตอน</h3><ol class="steps small">
+    <div class="card hide-s"><h3>ขั้นตอน</h3><ol class="steps small">
       <li>วางเลขพัสดุ ระบบแยกเป็นรายการให้เอง</li><li>กด <b>เปิด Tracking</b> ดูชื่อผู้รับบนหน้าขนส่ง</li><li><b>จับคู่ลูกค้า</b> ระบบจะแนะนำออเดอร์ที่น่าจะใช่</li><li>เลือกออเดอร์ หรือข้ามไปก่อนแล้วกลับมาทีหลังได้</li><li><b>สร้างข้อความ</b> หลายเลขของลูกค้าเดียวกันรวมเป็นข้อความเดียว</li></ol></div>
   </div>
   <div class="card" style="margin-top:16px">
