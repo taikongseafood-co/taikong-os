@@ -504,7 +504,7 @@ function calcOrder(o) {
    ========================================================= */
 const OWNER_EMAIL = 'taikongseafood.co@gmail.com';
 const COLS = ['customers', 'products', 'orders', 'costs', 'yield_calculations', 'tracking', 'tracking_messages', 'message_templates', 'trash_orders', 'trash_customers'];
-let DB = null, LASTFLAT = {}, READY = false, USER = null, ONLINE = true, PENDING_REMOTE = false, ROLE = null, ADMINS = {};
+let DB = null, LASTFLAT = {}, READY = false, USER = null, ONLINE = true, PENDING_REMOTE = false, ROLE = null, ADMINS = {}, ADMINS_ERR = '', DENY_WHY = '';
 const emailKey = e => String(e || '').trim().toLowerCase().replace(/\./g, ',');
 const isOwner = () => ROLE === 'owner';
 const randToken = (n = 24) => { const a = new Uint8Array(n); crypto.getRandomValues(a); const c = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'; return [...a].map(x => c[x % c.length]).join(''); };
@@ -593,7 +593,7 @@ const Backend = window.__FAKE_BACKEND || (() => {
   const auth = firebase.auth(), db = firebase.database();
   return {
     onAuth: cb => auth.onAuthStateChanged(u => cb(u && {email:u.email, emailVerified:u.emailVerified, name:u.displayName, photo:u.photoURL})),
-    signIn: async () => { const p = new firebase.auth.GoogleAuthProvider(); p.setCustomParameters({prompt:'select_account', login_hint:OWNER_EMAIL});
+    signIn: async () => { const p = new firebase.auth.GoogleAuthProvider(); p.setCustomParameters({prompt:'select_account'});
       try { await auth.signInWithPopup(p); } catch (e) { if (['auth/popup-blocked', 'auth/operation-not-supported-in-this-environment'].includes(e.code)) return auth.signInWithRedirect(p); throw e; } },
     signOut: () => auth.signOut(),
     listen: (cb, err) => { const r = db.ref(); const h = r.child('private').on('value', s => cb({private:s.val()}), err); return () => r.child('private').off('value', h); },
@@ -1533,6 +1533,7 @@ function usersCard() {
   if (!isOwner()) return `<div class="card"><h3>ผู้ใช้งาน</h3><p class="small muted" style="margin:0">คุณเข้าใช้งานในฐานะผู้ช่วย · การเพิ่มหรือลบผู้ใช้ทำได้เฉพาะเจ้าของร้าน (${esc(OWNER_EMAIL)})</p></div>`;
   const list = Object.entries(ADMINS).sort((a, b) => (a[1].added_at || '').localeCompare(b[1].added_at || ''));
   return `<div class="card"><h3>ผู้ใช้งาน</h3>
+    ${ADMINS_ERR ? `<div class="note" style="border-color:var(--red);margin-bottom:12px"><b style="color:var(--red)">Security Rules ยังเป็นเวอร์ชันเก่า</b> · ผู้ช่วยจะเข้าไม่ได้จนกว่าจะวาง database.rules.json เวอร์ชันล่าสุดใน Firebase → Realtime Database → Rules แล้วกด Publish (${esc(ADMINS_ERR)})</div>` : ''}
     <div class="stack" style="gap:8px">
       <div class="row" style="justify-content:space-between;padding:10px 12px;background:var(--surface-2);border-radius:12px"><span>👑 <b>${esc(OWNER_EMAIL)}</b> <span class="tag or">เจ้าของร้าน</span></span></div>
       ${list.map(([k, a]) => `<div class="row" style="justify-content:space-between;padding:10px 12px;border:1px solid var(--line);border-radius:12px"><span>👤 <b>${esc(a.email)}</b> <span class="tag blue">ผู้ช่วย</span><br><span class="small muted">เพิ่มเมื่อ ${a.added_at ? fmtDT(a.added_at) : '-'}</span></span><button class="btn sm danger" onclick="removeAdmin('${k}')">เอาออก</button></div>`).join('')}
@@ -1546,7 +1547,7 @@ async function addAdmin() {
   if (e === OWNER_EMAIL) return toast('อีเมลนี้เป็นเจ้าของร้านอยู่แล้ว');
   if (ADMINS[emailKey(e)]) return toast('มีผู้ใช้นี้อยู่แล้ว');
   try { await Backend.update({['admins/' + emailKey(e)]:{email:e, added_at:new Date().toISOString(), added_by:USER.email}}); toast('เพิ่ม ' + e + ' แล้ว · ให้เขาเปิดลิงก์เดียวกันแล้วล็อกอินด้วย Google'); }
-  catch (err) { toast('เพิ่มไม่สำเร็จ: ' + (err.code || err.message)); }
+  catch (err) { const pd = /permission/i.test(err.code || err.message); if (pd) { ADMINS_ERR = 'permission_denied'; render(); } toast(pd ? 'เพิ่มไม่สำเร็จ: Security Rules ยังเป็นเวอร์ชันเก่า' : 'เพิ่มไม่สำเร็จ: ' + (err.code || err.message)); }
 }
 function removeAdmin(k) {
   const a = ADMINS[k]; if (!a) return;
@@ -1780,7 +1781,7 @@ const IDLE_MS = 30 * 60 * 1000; let STOP = null, AUTHSTATE = 'loading', AUTHERR 
 function authScreen() {
   const s = AUTHSTATE;
   const body = s === 'loading' ? '<p class="muted">กำลังตรวจสอบการเข้าสู่ระบบ…</p>'
-    : s === 'denied' ? `<p>บัญชี <b>${esc(AUTHERR)}</b> ไม่มีสิทธิ์เข้าหลังบ้าน</p><p class="small muted">ถ้าคุณเป็นผู้ช่วย ขอให้เจ้าของร้านเพิ่มอีเมลนี้ใน Settings → ผู้ใช้งาน</p><button class="btn lg" style="width:100%" onclick="Backend.signOut()">ใช้บัญชีอื่น</button>`
+    : s === 'denied' ? `<p>บัญชี <b>${esc(AUTHERR)}</b> ไม่มีสิทธิ์เข้าหลังบ้าน</p>${DENY_WHY === 'rules' ? '<p class="small" style="color:var(--red)">ระบบตรวจสิทธิ์ไม่ได้ (permission denied) · เจ้าของร้านต้องอัปเดต Security Rules เวอร์ชันล่าสุดใน Firebase</p>' : '<p class="small muted">อีเมลนี้ยังไม่อยู่ในรายชื่อผู้ช่วย · ขอให้เจ้าของร้านเพิ่ม <b>อีเมลนี้ตรงตัวอักษร</b> ใน Settings → ผู้ใช้งาน</p>'}<button class="btn lg" style="width:100%" onclick="Backend.signOut()">ใช้บัญชีอื่น</button>`
     : s === 'syncing' ? '<p class="muted">กำลังโหลดข้อมูลร้าน…</p>'
     : `<p class="muted" style="margin-top:0">สำหรับเจ้าของร้านเท่านั้น</p><button class="btn pri lg" style="width:100%" onclick="login()"><svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#fff" d="M44.5 20H24v8.5h11.8C34.7 33.9 30.1 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2 11.8 2 2 11.8 2 24s9.8 22 22 22c11 0 21-8 21-22 0-1.3-.2-2.7-.5-4z"/></svg> เข้าสู่ระบบด้วย Google</button>${AUTHERR ? `<p class="small" style="color:var(--red);margin-top:12px">${esc(AUTHERR)}</p>` : ''}`;
   return `<div class="login"><div class="login-card"><div class="brand-mark" style="width:56px;height:56px;font-size:30px;border-radius:16px;margin:0 auto 14px">🦐</div><h1>TAIKONG SEAFOOD</h1><div class="muted small" style="margin-bottom:22px">ไต้ก๋ง ซีฟู้ด · หลังบ้าน</div>${body}</div><p class="small muted" style="text-align:center;margin-top:16px">🔒 ข้อมูลเข้ารหัสระหว่างส่ง และอ่านได้เฉพาะบัญชีเจ้าของร้าน</p></div>`;
@@ -1809,14 +1810,16 @@ function boot() {
     if (!u.emailVerified) { USER = null; AUTHSTATE = 'denied'; AUTHERR = email; return render(); }
     if (email === OWNER_EMAIL) ROLE = 'owner';
     else { AUTHSTATE = 'loading'; render();
-      let rec = null; try { rec = await Backend.get('admins/' + emailKey(email)); } catch (e) {}
+      let rec = null; DENY_WHY = '';
+      try { rec = await Backend.get('admins/' + emailKey(email)); if (!rec) DENY_WHY = 'notlisted'; }
+      catch (e) { DENY_WHY = 'rules'; console.error(e); }
       if (!rec) { USER = null; AUTHSTATE = 'denied'; AUTHERR = email; return render(); }
       ROLE = 'staff'; }
     if (idleExpired()) { AUTHERR = 'ล็อกอัตโนมัติ เพราะไม่ได้ใช้งานเกิน 30 นาที'; return logout(); }
     USER = u; markActive(); AUTHSTATE = 'syncing'; render();
     // เจ้าของร้าน: ดูรายชื่อผู้ช่วย · ผู้ช่วย: ถ้าถูกเอาออก → ออกจากระบบทันที
     stopRole = ROLE === 'owner'
-      ? Backend.on('admins', v => { ADMINS = v || {}; if (READY && location.hash.startsWith('#/settings')) render(); })
+      ? Backend.on('admins', v => { ADMINS = v || {}; ADMINS_ERR = ''; if (READY && location.hash.startsWith('#/settings')) render(); }, e => { ADMINS_ERR = e.code || e.message || 'permission_denied'; if (READY) render(); })
       : Backend.on('admins/' + emailKey(email), v => { if (!v) { AUTHERR = 'สิทธิ์การเข้าใช้งานของคุณถูกยกเลิกแล้ว'; logout(); } }, () => logout());
     STOP = Backend.listen(onRemote, e => { AUTHSTATE = 'signedout'; AUTHERR = 'อ่านข้อมูลไม่ได้ (' + (e.code || e.message) + ') ตรวจสอบ Security Rules'; USER = null; render(); });
   });
