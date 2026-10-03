@@ -510,7 +510,7 @@ function calcOrder(o) {
    /public/store      ชื่อร้าน / ช่องทางชำระเงิน สำหรับหน้าลูกค้า
    ========================================================= */
 const OWNER_EMAIL = 'taikongseafood.co@gmail.com';
-const COLS = ['customers', 'products', 'orders', 'costs', 'yield_calculations', 'tracking', 'tracking_messages', 'message_templates', 'trash_orders', 'trash_customers', 'stock_lots', 'stock_movements', 'stock_reservations', 'stock_allocations'];
+const COLS = ['customers', 'products', 'orders', 'costs', 'yield_calculations', 'tracking', 'tracking_messages', 'message_templates', 'trash_orders', 'trash_customers', 'trash_products', 'stock_lots', 'stock_movements', 'stock_reservations', 'stock_allocations'];
 let DB = null, LASTFLAT = {}, READY = false, USER = null, ONLINE = true, PENDING_REMOTE = false, ROLE = null, ADMINS = {}, ADMINS_ERR = '', DENY_WHY = '';
 const emailKey = e => String(e || '').trim().toLowerCase().replace(/\./g, ',');
 const isOwner = () => ROLE === 'owner';
@@ -1212,7 +1212,7 @@ function productModal(id) {
     <label class="row small" style="margin-top:14px"><input type="checkbox" data-k="active" ${p.active ? 'checked' : ''}> เปิดขาย</label>
     ${id ? '<div class="note" style="margin-top:12px">แก้ราคาหรือต้นทุนตรงนี้ จะไม่เปลี่ยนตัวเลขในออเดอร์ที่สร้างไปแล้ว</div>' : ''}
     ${catalogSection(p, id)}`,
-    `<button class="btn pri" onclick="saveProduct('${id || ''}')">บันทึก</button>`);
+    `${id ? `<button class="btn danger" style="margin-right:auto" onclick="deleteProduct('${id}')">🗑 ลบสินค้า</button>` : ''}<button class="btn pri" onclick="saveProduct('${id || ''}')">บันทึก</button>`);
 }
 async function saveProduct(id) {
   const v = {}; $$('#ov [data-k]').forEach(i => { if (i.disabled) return; v[i.dataset.k] = i.type === 'checkbox' ? i.checked : i.type === 'number' ? +i.value : i.value.trim(); });
@@ -1221,7 +1221,7 @@ async function saveProduct(id) {
   // หน่วยในฟอร์ม → หน่วยฐาน (กรัม / ตัว)
   v.catalog_low_threshold = v.catalog_low_threshold_ui > 0 ? (piece ? Math.round(v.catalog_low_threshold_ui) : toG(v.catalog_low_threshold_ui)) : 0; delete v.catalog_low_threshold_ui;
   if ('catalog_min_order_ui' in v) { v.catalog_min_order = v.catalog_min_order_ui > 0 ? toG(v.catalog_min_order_ui) : 0; delete v.catalog_min_order_ui; }
-  const now = new Date().toISOString(); const newId = id || nextId('P', DB.products);
+  const now = new Date().toISOString(); const newId = id || nextId('P', [...DB.products, ...DB.trash_products]);   // ไม่ใช้รหัสซ้ำกับสินค้าในถังขยะ
   v.slug = (v.slug || newId).toLowerCase().replace(/\s+/g, '-');
   if (!slugOk(v.slug)) return toast('Slug ใช้ได้เฉพาะ a-z, 0-9 และ - (2–60 ตัวอักษร)');
   if (DB.products.some(p => p.id !== newId && slugOf(p) === v.slug)) return toast('Slug นี้ถูกใช้กับสินค้าอื่นแล้ว');
@@ -1601,11 +1601,55 @@ function restoreCustomer(id) {
 function purge(col, id) {
   if (!isOwner()) return toast('ลบถาวรได้เฉพาะเจ้าของร้าน');
   const r = DB[col].find(x => x.id === id); if (!r) return;
+  if (col === 'trash_products') return confirmModal(`ลบสินค้า <b>${esc(r.name)}</b> ถาวร? รูปในเมนูจะถูกลบด้วย · กู้คืนไม่ได้อีก`, 'ลบถาวร', () => {
+    DB.trash_products = DB.trash_products.filter(x => x.id !== id); save(/^rtdb:/.test(r.image_url || '') ? {['public/catalog_images/' + slugOf(r)]:null} : {}); render(); toast('ลบถาวรแล้ว'); }, true);
   confirmModal(`ลบ <b>${esc(r.order_number || r.name)}</b> ถาวร? กู้คืนไม่ได้อีก`, 'ลบถาวร', () => { DB[col] = DB[col].filter(x => x.id !== id); save(); render(); toast('ลบถาวรแล้ว'); }, true);
+}
+/* ----- ลบสินค้า: ได้เฉพาะสินค้าที่ไม่เคยมีออเดอร์และไม่มี Lot → ย้ายไปถังขยะ (กู้คืนได้) ----- */
+function deleteProduct(id) {
+  const p = P(id); if (!p) return;
+  const usedIn = [...DB.orders, ...DB.trash_orders].filter(o => (o.items || []).some(i => i.product_id === id));
+  if (usedIn.length) return modal('ลบสินค้าไม่ได้', `<p style="margin-top:0"><b>${esc(p.name)}</b> มีออเดอร์ ${usedIn.length} รายการ (รวมในถังขยะ)</p><p class="small muted">ออเดอร์เก่าต้องรู้ว่าขายสินค้าอะไร · ถ้าไม่ขายแล้ว ให้ "ปิดขาย" สินค้าจะหายจากฟอร์มออเดอร์และเมนูลูกค้า</p>`,
+    p.active ? `<button class="btn pri" onclick="P('${id}').active=false;P('${id}').updated_at=new Date().toISOString();save();closeModal();toast('ปิดขายแล้ว');render()">ปิดขาย</button>` : '');
+  const lots = DB.stock_lots.filter(l => l.product_id === id).length;
+  if (lots) return modal('ลบสินค้าไม่ได้', `<p style="margin-top:0"><b>${esc(p.name)}</b> ยังมี Stock Lot ${lots} รายการ</p><p class="small muted">ลบ Lot ที่รับเข้าผิดก่อนที่หน้า Stock แล้วค่อยลบสินค้า</p>`, `<a class="btn pri" href="#/stock/${id}" onclick="closeModal()">ไปหน้า Stock ของสินค้านี้</a>`);
+  typedConfirm('ลบสินค้า', `ย้าย <b>${esc(p.name)} ${esc(p.size || '')}</b> ไปถังขยะ?<br><span class="small muted">หายจาก Products และเมนูลูกค้าทันที · กู้คืนได้ที่ Settings → ถังขยะ</span>`, id, 'ลบสินค้า', () => {
+    DB.products = DB.products.filter(x => x.id !== id); DB.stock_allocations = DB.stock_allocations.filter(a => a.id !== id);
+    DB.trash_products.push({...p, deleted_at:new Date().toISOString(), deleted_by:USER?.email || ''});
+    save(); closeModal(); toast('ย้ายสินค้าไปถังขยะแล้ว'); go('#/products');
+  });
+}
+function restoreProduct(id) {
+  const p = DB.trash_products.find(x => x.id === id); if (!p) return;
+  const {deleted_at, deleted_by, ...rest} = p;
+  if (DB.products.some(x => slugOf(x) === slugOf(rest))) rest.slug = rest.id.toLowerCase();       // slug ถูกใช้ไปแล้ว → กลับไปใช้รหัสสินค้า
+  DB.trash_products = DB.trash_products.filter(x => x.id !== id); DB.products.push(rest);
+  save(); render(); toast('กู้คืนสินค้าแล้ว');
+}
+/* ----- ลบ Lot: ได้เฉพาะ Lot ที่ยังไม่ถูกตัดขาย และไม่ทำให้ของที่จองไว้เกินสต็อก ----- */
+function deleteLot(lotId) {
+  const lot = DB.stock_lots.find(l => l.id === lotId); if (!lot) return;
+  const p = P(lot.product_id), st = stockOf(lot.product_id), piece = isPiece(p);
+  if (DB.stock_movements.some(m => m.lot_id === lotId && (m.type === 'SALE' || m.type === 'RETURN')))
+    return modal('ลบ Lot ไม่ได้', `<p style="margin-top:0">Lot <b class="num">${lot.lot_code}</b> ถูกตัดขายให้ออเดอร์แล้ว</p><p class="small muted">ประวัติการขายต้องอ้างถึง Lot นี้ · ถ้าจำนวนไม่ถูกต้อง ให้ใช้ "ปรับสต็อก / นับจริง" แทน</p>`);
+  const r = st.rem[lotId] || {g:0, pc:0}, after = st.base - (piece ? r.pc : r.g);
+  if (st.sumR > after) return modal('ลบ Lot ไม่ได้', `<p style="margin-top:0">มีออเดอร์จอง ${esc(p.name)} ไว้ ${fmtQ(p, st.sumR)} แต่ถ้าลบ Lot นี้ จะเหลือ ${fmtQ(p, Math.max(0, after))}</p><p class="small muted">ยกเลิกหรือแก้ออเดอร์ที่จองไว้ก่อน แล้วค่อยลบ Lot</p>`);
+  const costs = DB.costs.filter(c => c.lot_id === lotId), lastLot = DB.stock_lots.filter(l => l.product_id === p.id).length === 1;
+  typedConfirm('ลบ Lot ที่รับเข้าผิด', `ลบ Lot <b class="num">${lot.lot_code}</b> · ${esc(p.name)} ${fmtW(lot.received_g)}${lot.received_pcs ? ' / ' + lot.received_pcs + ' ตัว' : ''}?
+    <br><span class="small muted">ประวัติรับเข้า/ปรับยอดของ Lot นี้จะถูกลบ${costs.length ? ` · รายการซื้อใน Monthly Cost ${baht(costs.reduce((s, c) => s + c.amount, 0))} ที่สร้างพร้อมกันจะถูกลบด้วย` : ''}${lastLot ? ' · เป็น Lot สุดท้าย สินค้าจะกลับเป็น "ยังไม่ติดตามสต็อก" และแก้วิธีนับสต็อกได้อีกครั้ง' : ''}</span>`, lot.lot_code, 'ลบ Lot', () => {
+    DB.stock_movements = DB.stock_movements.filter(m => m.lot_id !== lotId);
+    DB.stock_lots = DB.stock_lots.filter(l => l.id !== lotId);
+    DB.costs = DB.costs.filter(c => c.lot_id !== lotId);
+    if (!DB.stock_lots.some(l => l.product_id === p.id) && !DB.stock_reservations.some(v => v.product_id === p.id && v.status === 'active')) {
+      p.stock_enabled = false; DB.stock_allocations = DB.stock_allocations.filter(a => a.id !== p.id);
+    } else clampAlloc(p.id);
+    p.updated_at = new Date().toISOString(); save(); toast('ลบ Lot ' + lot.lot_code + ' แล้ว'); render();
+  });
 }
 function trashCard() {
   const items = [...DB.trash_orders.map(o => ({col:'trash_orders', id:o.id, label:`🧾 <b class="num">${o.order_number}</b> · ${esc(C(o.customer_id).name)} · ${baht(o.total)}`, at:o.deleted_at, by:o.deleted_by, restore:`restoreOrder('${o.id}')`})),
-    ...DB.trash_customers.map(c => ({col:'trash_customers', id:c.id, label:`👤 <b>${esc(c.name)}</b>`, at:c.deleted_at, by:c.deleted_by, restore:`restoreCustomer('${c.id}')`}))].sort((a, b) => b.at.localeCompare(a.at));
+    ...DB.trash_customers.map(c => ({col:'trash_customers', id:c.id, label:`👤 <b>${esc(c.name)}</b>`, at:c.deleted_at, by:c.deleted_by, restore:`restoreCustomer('${c.id}')`})),
+    ...DB.trash_products.map(p => ({col:'trash_products', id:p.id, label:`📦 <b>${esc(p.name)}</b> ${esc(p.size || '')} <span class="muted num">${p.id}</span>`, at:p.deleted_at, by:p.deleted_by, restore:`restoreProduct('${p.id}')`}))].sort((a, b) => b.at.localeCompare(a.at));
   return `<div class="card"><h3>ถังขยะ</h3>${items.length ? `<div class="stack" style="gap:8px">${items.map(x => `<div class="row" style="justify-content:space-between;padding:10px 12px;border:1px solid var(--line);border-radius:12px"><span>${x.label}<br><span class="small muted">ลบเมื่อ ${fmtDT(x.at)}${x.by ? ' · ' + esc(x.by) : ''}</span></span><span class="row" style="gap:6px"><button class="btn sm" onclick="${x.restore}">กู้คืน</button>${isOwner() ? `<button class="btn sm danger" onclick="purge('${x.col}','${x.id}')">ลบถาวร</button>` : ''}</span></div>`).join('')}</div>` : '<p class="small muted" style="margin:0">ถังขยะว่าง</p>'}</div>`;
 }
 function usersCard() {
@@ -2096,8 +2140,8 @@ function vStockProduct(pid) {
         <div class="ln big"><span>คงเหลือ</span><span class="num">${fmtW(st.g)}${piece ? ' · ' + st.pc + ' ตัว' : ''}</span></div></div>
         <div class="row" style="margin-top:14px"><button class="btn sm pri" onclick="receiveModal('${pid}')">＋ รับเข้า</button><button class="btn sm" onclick="adjustModal('${pid}')">ปรับสต็อก / นับจริง</button></div></div>
     </div>
-    <div class="card"><h3>Stock Lots</h3>${st.lots.length ? `<div class="tw"><table class="t cards"><thead><tr><th>Lot</th><th>รับเมื่อ</th><th class="r">รับเข้า</th><th class="r">ต้นทุน</th><th class="r">คงเหลือ</th></tr></thead><tbody>
-      ${st.lots.slice().reverse().map(l => { const r = st.rem[l.id]; return `<tr><td><b class="num">${l.lot_code}</b>${l.supplier ? `<div class="small muted">${esc(l.supplier)}</div>` : ''}${l.piece_weights ? `<details class="small"><summary class="muted" style="cursor:pointer">น้ำหนักรายตัว ${l.piece_weights.length} ตัว</summary><span class="num">${l.piece_weights.join(', ')} g</span></details>` : ''}${l.notes ? `<div class="small muted">${esc(l.notes)}</div>` : ''}</td><td class="small muted num">${fmtD(l.received_at)}</td><td class="r num">${fmtW(l.received_g)}${l.received_pcs ? `<div class="small muted">${l.received_pcs} ตัว</div>` : ''}</td><td class="r num">${baht(l.cost_per_kg, 2)}/kg<div class="small muted">${baht(l.cost_total, 2)}</div></td><td class="r num"><b>${fmtW(r.g)}</b>${piece || l.received_pcs ? `<div class="small muted">${r.pc} ตัว</div>` : ''}</td></tr>`; }).join('')}
+    <div class="card"><h3>Stock Lots</h3>${st.lots.length ? `<div class="tw"><table class="t cards"><thead><tr><th>Lot</th><th>รับเมื่อ</th><th class="r">รับเข้า</th><th class="r">ต้นทุน</th><th class="r">คงเหลือ</th><th></th></tr></thead><tbody>
+      ${st.lots.slice().reverse().map(l => { const r = st.rem[l.id]; return `<tr><td><b class="num">${l.lot_code}</b>${l.supplier ? `<div class="small muted">${esc(l.supplier)}</div>` : ''}${l.piece_weights ? `<details class="small"><summary class="muted" style="cursor:pointer">น้ำหนักรายตัว ${l.piece_weights.length} ตัว</summary><span class="num">${l.piece_weights.join(', ')} g</span></details>` : ''}${l.notes ? `<div class="small muted">${esc(l.notes)}</div>` : ''}</td><td class="small muted num">${fmtD(l.received_at)}</td><td class="r num">${fmtW(l.received_g)}${l.received_pcs ? `<div class="small muted">${l.received_pcs} ตัว</div>` : ''}</td><td class="r num">${baht(l.cost_per_kg, 2)}/kg<div class="small muted">${baht(l.cost_total, 2)}</div></td><td class="r num"><b>${fmtW(r.g)}</b>${piece || l.received_pcs ? `<div class="small muted">${r.pc} ตัว</div>` : ''}</td><td class="r"><button class="btn sm ghost danger" title="ลบ Lot ที่รับเข้าผิด" aria-label="ลบ Lot ${l.lot_code}" onclick="deleteLot('${l.id}')">🗑</button></td></tr>`; }).join('')}
     </tbody></table></div>` : '<div class="empty">ยังไม่มี Lot</div>'}</div>
     <div class="card"><h3>ประวัติการเคลื่อนไหว</h3>${mvs.length ? `<div class="tw"><table class="t cards"><thead><tr><th>เวลา</th><th>รายการ</th><th class="r">จำนวน</th><th>อ้างอิง</th></tr></thead><tbody>
       ${mvs.map(m => { const o = m.order_id ? (DB.orders.find(x => x.id === m.order_id) || DB.trash_orders.find(x => x.id === m.order_id)) : null; const phys = PHYS.has(m.type);
