@@ -367,6 +367,8 @@ ol.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;c
   .in,select.in,textarea.in{font-size:16px!important}
   .task{padding:14px 16px}
 }
+.pimg{width:96px;height:96px;border-radius:12px;background:var(--surface-2);border:1px dashed var(--line-2);display:grid;place-items:center;overflow:hidden;flex:none;text-align:center;padding:4px}
+.pimg img{width:100%;height:100%;object-fit:cover}
 .sheet{position:fixed;inset:auto 0 0 0;background:var(--surface);border-radius:20px 20px 0 0;padding:16px 16px calc(20px + env(safe-area-inset-bottom,0px));z-index:55;display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .sheet a{display:flex;flex-direction:column;align-items:center;gap:4px;padding:14px 6px;border-radius:14px;background:var(--surface-2);text-decoration:none;color:var(--ink);font-size:13px}
 .sheet a .ic{font-size:22px}
@@ -521,6 +523,7 @@ function defaultSettings() {
     payment:{promptpay:'', bank:'', account_name:'', account_no:'', qr_mode:'promptpay', qr_image:''},
     shipping:{carrier:'Inter Express', fee:0, tracking_url:'https://iel.co.th/tracking/?trackingNo={tracking}', label_size:'a4', label_note:'อาหารสดแช่แข็ง ห้ามวางคว่ำ'},
     cost:{packaging:0, other:0},
+    catalog:{line_id:'', tagline:'', hero_url:'', packing_text:'', shipping_text:''},
   };
 }
 function defaultTemplates() {
@@ -568,16 +571,28 @@ function toFlat() {
   put('private/meta', {initialized:true});
   DB.orders.forEach(o => put('public/orders/' + o.public_token, pubOrder(o)));
   put('public/store', pubStore());
+  Object.entries(buildCatalog()).forEach(([k, v]) => put(k, v));             // Digital Menu: allowlist เท่านั้น
   return f;
 }
-function save() {
-  if (!READY) return;
+/* save(): เขียน private + public (orders, store, catalog) ใน multi-path update เดียว (atomic)
+   G3: ถ้าเขียนล้มเหลว จะไม่จำว่าสำเร็จ — path ที่ล้มจะถูกส่งใหม่ในการบันทึกครั้งถัดไป (ไม่มี retry loop อัตโนมัติ) */
+let RETRY_DEL = new Set(), PENDING_EXTRA = {};
+function save(extra) {
+  if (!READY) return Promise.resolve();
   stockSyncAll();                                                              // ออเดอร์เปลี่ยน → จอง/ตัด/คืนสต็อกอัตโนมัติ
   const f = toFlat(), up = {};
   Object.keys(f).forEach(k => { if (f[k] !== LASTFLAT[k]) up[k] = JSON.parse(f[k]); });
   Object.keys(LASTFLAT).forEach(k => { if (!(k in f)) up[k] = null; });
+  RETRY_DEL.forEach(k => { if (!(k in f)) up[k] = null; }); RETRY_DEL = new Set();
+  Object.assign(up, PENDING_EXTRA, extra || {}); PENDING_EXTRA = {};
   LASTFLAT = f;
-  if (Object.keys(up).length) Backend.update(up).catch(e => { console.error(e); toast('บันทึกไม่สำเร็จ: ' + (e.code || e.message)); });
+  if (!Object.keys(up).length) return Promise.resolve();
+  WRITING++;
+  return Backend.update(up).then(() => { WRITING--; }, e => {
+    WRITING--; console.error(e);
+    Object.keys(up).forEach(k => { if (k.startsWith('public/catalog_images/')) PENDING_EXTRA[k] = up[k]; else if (up[k] === null) RETRY_DEL.add(k); else delete LASTFLAT[k]; });
+    toast('บันทึกไม่สำเร็จ (' + (e.code || e.message) + ') · จะส่งใหม่ในการบันทึกครั้งถัดไป');
+  });
 }
 function onRemote(val) {
   if (!USER) return;                                                            // ออกจากระบบแล้ว ไม่รับข้อมูลที่ค้างมา
@@ -585,6 +600,7 @@ function onRemote(val) {
   const prevFlat = LASTFLAT; DB = d; READY = true; LASTFLAT = toFlat();
   if (!val || !val.private || !val.private.meta) { LASTFLAT = {}; save(); }      // ครั้งแรก: สร้างค่าเริ่มต้น (ข้อมูลว่าง)
   else if (fixed) save();
+  scheduleHeal();                                                               // G2: ตรวจ public/catalog ให้ตรงกับข้อมูลล่าสุด
   if (first) return render();
   if (JSON.stringify(LASTFLAT) === JSON.stringify(prevFlat)) return;           // เป็นข้อมูลที่เราเพิ่งเขียนเอง
   const busy = $('#ov') || /^#\/order\/(new|.+\/edit)/.test(location.hash) || location.hash.startsWith('#/settings');
@@ -1178,13 +1194,14 @@ function vProducts(q) {
   const cat = q.cat || 'all'; let ps = DB.products; if (cat !== 'all') ps = ps.filter(p => p.category === cat);
   const body = `<div class="stack"><div class="row"><div class="seg">${['all', ...CATS].map(c => `<button class="${cat === c ? 'on' : ''}" onclick="go('#/products?cat=${c}')">${c === 'all' ? 'ทั้งหมด' : c}</button>`).join('')}</div></div>
   ${!DB.products.length ? '<div class="card empty">ยังไม่มีสินค้า<br><button class="btn pri" style="margin-top:12px" onclick="productModal()">＋ เพิ่มสินค้าแรก</button></div>' : ''}<div class="plist">${ps.map(p => `<div class="card prod ${p.active ? '' : 'off'}" onclick="productModal('${p.id}')" tabindex="0" onkeydown="if(event.key==='Enter')productModal('${p.id}')">
-    <div class="row" style="flex-wrap:nowrap"><div class="em">${CAT_EMOJI[p.category]}</div><div style="min-width:0"><b>${esc(p.name)}</b><div class="small muted">${esc(p.size)}${p.active ? '' : ' · ปิดขาย'}</div></div></div>
+    <div class="row" style="flex-wrap:nowrap"><div class="em">${CAT_EMOJI[p.category]}</div><div style="min-width:0"><b>${esc(p.name)}</b><div class="small muted">${esc(p.size)}${p.active ? '' : ' · ปิดขาย'}${p.show_on_catalog && p.active ? ' · <span style="color:var(--blue)">🛍 ในเมนู</span>' : ''}</div></div></div>
     <div class="tiers num"><div>ปลีก<b>${n2(p.retail_price)}</b></div><div>5kg<b>${n2(p.price_5kg)}</b></div><div>10kg<b>${n2(p.price_10kg)}</b></div><div>20kg<b>${n2(p.price_20kg)}</b></div></div>
     <div class="row small"><span class="muted">ต้นทุน</span><b class="num">${baht(p.cost_per_unit, 2)}</b><span class="muted">· Yield</span><span class="num">${n2(p.yield_percent)}%</span><span class="grow"></span><span class="num" style="color:var(--blue)">+${baht(p.retail_price - p.cost_per_unit)}/kg</span></div>
   </div>`).join('')}</div></div>`;
   return shell('products', 'Products', 'ราคาและต้นทุนที่ระบบใช้ตอนสร้างออเดอร์', `<button class="btn pri" onclick="productModal()">＋ เพิ่มสินค้า</button>`, body);
 }
 function productModal(id) {
+  PIMG = null;
   const p = id ? P(id) : {name:'', category:'กุ้ง', size:'', unit:'kg', retail_price:0, price_5kg:0, price_10kg:0, price_20kg:0, cost_per_unit:0, yield_percent:100, packaging_cost:0, active:true, notes:''};
   const f = (k, l, t = 'number') => `<label class="f">${l}<input class="in ${t === 'number' ? 'num' : ''}" type="${t}" data-k="${k}" value="${esc(p[k])}"></label>`;
   modal(id ? 'แก้ไขสินค้า' : 'เพิ่มสินค้า', `<div class="fgrid">${f('name', 'ชื่อสินค้า', 'text')}${f('size', 'ขนาด', 'text')}<label class="f">หมวด<select class="in" data-k="category">${CATS.map(c => `<option ${c === p.category ? 'selected' : ''}>${c}</option>`).join('')}</select></label>${f('unit', 'หน่วยขาย (kg / ตัว)', 'text')}
@@ -1193,16 +1210,35 @@ function productModal(id) {
     <h4 style="margin:16px 0 8px;font-size:14px">ราคาขาย / kg</h4><div class="fgrid">${f('retail_price', 'ปลีก')}${f('price_5kg', '5kg ขึ้นไป')}${f('price_10kg', '10kg ขึ้นไป')}${f('price_20kg', '20kg ขึ้นไป')}</div>
     <h4 style="margin:16px 0 8px;font-size:14px">ต้นทุน</h4><div class="fgrid">${f('cost_per_unit', 'ต้นทุน / kg')}${f('yield_percent', 'Yield %')}</div>
     <label class="row small" style="margin-top:14px"><input type="checkbox" data-k="active" ${p.active ? 'checked' : ''}> เปิดขาย</label>
-    ${id ? '<div class="note" style="margin-top:12px">แก้ราคาหรือต้นทุนตรงนี้ จะไม่เปลี่ยนตัวเลขในออเดอร์ที่สร้างไปแล้ว</div>' : ''}`,
+    ${id ? '<div class="note" style="margin-top:12px">แก้ราคาหรือต้นทุนตรงนี้ จะไม่เปลี่ยนตัวเลขในออเดอร์ที่สร้างไปแล้ว</div>' : ''}
+    ${catalogSection(p, id)}`,
     `<button class="btn pri" onclick="saveProduct('${id || ''}')">บันทึก</button>`);
 }
-function saveProduct(id) {
+async function saveProduct(id) {
   const v = {}; $$('#ov [data-k]').forEach(i => { if (i.disabled) return; v[i.dataset.k] = i.type === 'checkbox' ? i.checked : i.type === 'number' ? +i.value : i.value.trim(); });
   if (!v.name) return toast('ใส่ชื่อสินค้าก่อน');
-  const now = new Date().toISOString();
+  const piece = (v.stock_type || (id && P(id).stock_type)) === 'PIECE_AND_WEIGHT';
+  // หน่วยในฟอร์ม → หน่วยฐาน (กรัม / ตัว)
+  v.catalog_low_threshold = v.catalog_low_threshold_ui > 0 ? (piece ? Math.round(v.catalog_low_threshold_ui) : toG(v.catalog_low_threshold_ui)) : 0; delete v.catalog_low_threshold_ui;
+  if ('catalog_min_order_ui' in v) { v.catalog_min_order = v.catalog_min_order_ui > 0 ? toG(v.catalog_min_order_ui) : 0; delete v.catalog_min_order_ui; }
+  const now = new Date().toISOString(); const newId = id || nextId('P', DB.products);
+  v.slug = (v.slug || newId).toLowerCase().replace(/\s+/g, '-');
+  if (!slugOk(v.slug)) return toast('Slug ใช้ได้เฉพาะ a-z, 0-9 และ - (2–60 ตัวอักษร)');
+  if (DB.products.some(p => p.id !== newId && slugOf(p) === v.slug)) return toast('Slug นี้ถูกใช้กับสินค้าอื่นแล้ว');
+  const old = id ? P(id) : null, oldSlug = old ? slugOf(old) : null, extra = {};
+  const imgPath = s => 'public/catalog_images/' + s;
+  if (PIMG && PIMG !== 'remove') {
+    const ver = Date.now(); extra[imgPath(v.slug) + '/thumb'] = {...PIMG.thumb, v:ver}; extra[imgPath(v.slug) + '/large'] = {...PIMG.large, v:ver};
+    v.image_url = 'rtdb:' + v.slug + '?v=' + ver;
+    if (oldSlug && oldSlug !== v.slug) extra[imgPath(oldSlug)] = null;
+  } else if (PIMG === 'remove') { v.image_url = ''; if (oldSlug) extra[imgPath(oldSlug)] = null; if (oldSlug !== v.slug) extra[imgPath(v.slug)] = null; }
+  else if (old && oldSlug !== v.slug && /^rtdb:/.test(old.image_url || '')) {        // เปลี่ยน slug → ย้ายรูปไป path ใหม่ใน update เดียวกัน
+    try { const im = await Backend.get(imgPath(oldSlug)); if (im) { extra[imgPath(v.slug)] = im; extra[imgPath(oldSlug)] = null; v.image_url = 'rtdb:' + v.slug + '?v=' + (im.thumb?.v || 1); } }
+    catch (e) { return toast('ย้ายรูปไม่สำเร็จ ลองใหม่อีกครั้ง'); }
+  }
   if (id) Object.assign(P(id), v, {updated_at:now});
-  else DB.products.push({id:nextId('P', DB.products), ...v, packaging_cost:0, image_url:'', notes:'', created_at:now, updated_at:now});
-  save(); closeModal(); toast('บันทึกสินค้าแล้ว'); render();
+  else DB.products.push({id:newId, image_url:'', ...v, packaging_cost:0, notes:'', created_at:now, updated_at:now});
+  PIMG = null; save(extra); closeModal(); toast('บันทึกสินค้าแล้ว'); render();
 }
 
 /* ---------- Customers ---------- */
@@ -1495,6 +1531,7 @@ function vSettings() {
   const s = DB.settings; const f = (path, l, ph = '') => { const [a, b] = path.split('.'); return `<label class="f">${l}<input class="in" data-p="${path}" value="${esc(s[a][b])}" placeholder="${ph}"></label>`; };
   const body = `<div class="stack">
     ${usersCard()}
+    ${menuCard()}
     <div class="card"><h3>ข้อมูลร้าน</h3>
       <div class="row" style="margin-bottom:14px;flex-wrap:nowrap">${logoMark().replace('brand-mark', 'brand-mark" style="width:64px;height:64px;font-size:32px;border-radius:16px')}<div class="stack" style="gap:6px"><b class="small">โลโก้ร้าน</b><div class="row"><label class="btn sm">อัปโหลดโลโก้<input type="file" accept="image/*" hidden onchange="logoUpload(this)"></label>${s.store.logo ? `<button class="btn sm danger" onclick="DB.settings.store.logo='';save();render()">ลบโลโก้</button>` : ''}</div><span class="small muted">ใช้ในเมนูหลังบ้านและหน้าสรุปออเดอร์ของลูกค้า · รูปสี่เหลี่ยมจัตุรัสดีที่สุด</span></div></div>
       <div class="fgrid">${f('store.name_en', 'ชื่อร้าน (อังกฤษ)')}${f('store.name', 'ชื่อร้าน')}${f('store.phone', 'เบอร์โทร')}${f('store.line', 'LINE')}${f('store.address', 'ที่อยู่')}</div></div>
@@ -2070,6 +2107,118 @@ function vStockProduct(pid) {
   return shell('stock', esc(p.name) + (p.size ? ' <span class="muted" style="font-size:.6em">' + esc(p.size) + '</span>' : ''), STYPE[p.stock_type] || '', `<a class="btn" href="#/stock">‹ Stock</a>`, body);
 }
 
+/* =========================================================
+   DIGITAL MENU — PUBLIC CATALOG (ฝั่งหลังบ้าน)
+   private/products + private/stock_*  →  buildCatalog() (allowlist เท่านั้น)  →  public/catalog
+   - เขียนใน multi-path update เดียวกับ private ผ่าน save()/toFlat() เดิม
+   - รูป: public/catalog_images/{slug}/thumb|large (WebP ย่อในเบราว์เซอร์) · product.image_url = "rtdb:{slug}?v={n}"
+   - สถานะ: ใช้ยอดขายได้ของช่องทาง LINE (stockOf().sell.LINE) · เกณฑ์ปรับรายสินค้าได้
+   ========================================================= */
+const CAT_DEFAULTS = {WEIGHT_ONLY:{low:3000, min:1000}, SIZE_GRADE_WEIGHT:{low:3000, min:1000}, PIECE_AND_WEIGHT:{low:3, min:1}};
+const CAT_STATUS = {available:'🟢 มีสินค้า', low:'🟡 เหลือจำนวนจำกัด', soldout:'🔴 หมดชั่วคราว', preorder:'🔵 สั่งจองล่วงหน้า', ask:'💬 สอบถามทาง LINE'};
+const slugOk = s => /^[a-z0-9-]{2,60}$/.test(s || '');
+const slugOf = p => slugOk(p.slug) ? p.slug : p.id.toLowerCase();
+const catThresholds = p => { const d = CAT_DEFAULTS[p.stock_type || 'WEIGHT_ONLY'] || CAT_DEFAULTS.WEIGHT_ONLY;
+  return {low:+p.catalog_low_threshold > 0 ? +p.catalog_low_threshold : d.low, min:isPiece(p) ? 1 : (+p.catalog_min_order > 0 ? +p.catalog_min_order : d.min)}; };
+function catalogStatus(p) {
+  const ov = p.catalog_status || 'auto'; if (ov !== 'auto') return ov;
+  if (!stockOn(p)) return 'ask';
+  const q = stockOf(p.id).sell.LINE, t = catThresholds(p);
+  return q < t.min ? 'soldout' : q <= t.low ? 'low' : 'available';
+}
+function lastReceived(pid) { let d = null; DB.stock_lots.forEach(l => { if (l.product_id === pid && (!d || l.received_at > d)) d = l.received_at; }); return d; }
+/* allowlist: สร้าง object ใหม่ทีละ field — ไม่มีการคัดลอก product ทั้งก้อน */
+function catalogProduct(p, i) {
+  const piece = isPiece(p), num = x => Math.round((+x || 0) * 100) / 100;
+  const prices = piece ? {p1:num(p.retail_price)} : {p1:num(p.retail_price), p5:num(p.price_5kg), p10:num(p.price_10kg), p20:num(p.price_20kg)};
+  const img = /^rtdb:/.test(p.image_url || '') ? +((p.image_url.split('v=')[1]) || 1) : 0;
+  const hl = String(p.catalog_highlights || '').split('\n').map(s => s.trim()).filter(Boolean).slice(0, 8);
+  return {slug:slugOf(p), name:String(p.name || ''), size:String(p.size || ''), category:String(p.category || ''), unit:piece ? 'ตัว' : 'kg',
+    prices, description:String(p.catalog_description || '').slice(0, 600), highlights:hl, featured:!!p.catalog_featured,
+    status:catalogStatus(p), last_received:lastReceived(p.id) || '', image_v:img, sort:i};
+}
+function catalogMeta() {
+  const s = DB.settings, c = s.catalog || {};
+  return {name:s.store.name || '', name_en:s.store.name_en || '', logo:s.store.logo || '', phone:s.store.phone || '',
+    line_id:(c.line_id || s.store.line || '').trim(), packing_text:c.packing_text || '', shipping_text:c.shipping_text || '',
+    shipping_fee:+s.shipping.fee || 0, hero_url:c.hero_url || '', tagline:c.tagline || ''};
+}
+function buildCatalog() {
+  const out = {'public/catalog/meta':catalogMeta()};
+  DB.products.filter(p => p.active && p.show_on_catalog).forEach((p, i) => out['public/catalog/products/' + slugOf(p)] = catalogProduct(p, i));
+  return out;
+}
+/* ----- G2 self-healing: เทียบ catalog ที่คำนวณได้กับบน server แล้วเขียนเฉพาะที่ต่าง ----- */
+const canon = v => { if (v === null || v === undefined) return undefined; if (Array.isArray(v)) { const a = v.map(canon).filter(x => x !== undefined); return a.length ? a : undefined; }
+  if (typeof v === 'object') { const o = {}; Object.keys(v).sort().forEach(k => { const c = canon(v[k]); if (c !== undefined) o[k] = c; }); return Object.keys(o).length ? o : undefined; }
+  if (v === '') return undefined; return v; };
+const cs = v => JSON.stringify(canon(v) ?? null);
+let SERVER_CAT = undefined, HEAL_T = null, HEAL_LOG = [], WRITING = 0;
+function scheduleHeal() { clearTimeout(HEAL_T); HEAL_T = setTimeout(healCatalog, 2000); }
+function healCatalog() {
+  if (!READY || !DB || SERVER_CAT === undefined) return;
+  if (WRITING > 0) return scheduleHeal();                                       // รอให้การเขียนของเราเองเสร็จก่อน
+  const now = Date.now(); HEAL_LOG = HEAL_LOG.filter(t => now - t < 60000);
+  if (HEAL_LOG.length >= 5) { console.warn('catalog heal rate-limited'); return; }   // กัน loop: ไม่เกิน 5 ครั้ง/นาที
+  const want = buildCatalog(), srv = {}, sc = SERVER_CAT || {};
+  if (sc.meta) srv['public/catalog/meta'] = sc.meta;
+  Object.entries(sc.products || {}).forEach(([k, v]) => srv['public/catalog/products/' + k] = v);
+  const up = {};
+  Object.keys(want).forEach(k => { if (cs(want[k]) !== cs(srv[k])) up[k] = want[k]; });
+  Object.keys(srv).forEach(k => { if (!(k in want)) up[k] = null; });
+  if (!Object.keys(up).length) return;                                          // เหมือนกันแล้ว → ไม่เขียน
+  HEAL_LOG.push(now); WRITING++;
+  Backend.update(JSON.parse(JSON.stringify(up))).then(() => WRITING--, e => { WRITING--; console.error('heal', e); });
+}
+
+/* ----- รูปสินค้า: ย่อในเบราว์เซอร์ เป็น WebP (fallback JPEG ถ้าเบราว์เซอร์ไม่รองรับ) ----- */
+function shrink(img, max, q) {
+  const r = Math.min(1, max / Math.max(img.width, img.height)), w = Math.round(img.width * r), h = Math.round(img.height * r);
+  const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d');
+  x.imageSmoothingQuality = 'high'; x.drawImage(img, 0, 0, w, h);
+  let d = c.toDataURL('image/webp', q); if (!d.startsWith('data:image/webp')) d = c.toDataURL('image/jpeg', q);
+  return {data:d, w, h, type:d.slice(5, d.indexOf(';'))};
+}
+let PIMG = null;   // {thumb, large} | 'remove' | null — รูปที่รอบันทึกในฟอร์มสินค้า
+function pickProductImage(inp) {
+  const f = inp.files[0]; if (!f) return; const r = new FileReader();
+  r.onload = () => { const img = new Image(); img.onload = () => {
+    let large = shrink(img, 900, 0.8); if (large.data.length > 220000) large = shrink(img, 900, 0.62);
+    PIMG = {thumb:shrink(img, 320, 0.72), large}; $('#pimg').innerHTML = `<img src="${PIMG.thumb.data}" alt="">`;
+    $('#pimgsz').textContent = `รูปเล็ก ${Math.round(PIMG.thumb.data.length / 1024)} KB · รูปใหญ่ ${Math.round(PIMG.large.data.length / 1024)} KB · ${PIMG.large.type.split('/')[1].toUpperCase()}`; };
+    img.onerror = () => toast('อ่านรูปไม่ได้'); img.src = r.result; };
+  r.readAsDataURL(f);
+}
+function catalogSection(p, id) {
+  const piece = isPiece(p), t = catThresholds(p), ov = p.catalog_status || 'auto';
+  setTimeout(async () => { if (id && /^rtdb:/.test(p.image_url || '')) { try { const t = await Backend.get('public/catalog_images/' + slugOf(p) + '/thumb'); if (t && $('#pimg') && !PIMG) $('#pimg').innerHTML = `<img src="${t.data}" alt="">`; } catch (e) {} } }, 0);
+  return `<h4 style="margin:18px 0 8px;font-size:14px">🛍 Digital Menu</h4>
+    <label class="row small"><input type="checkbox" class="ck" data-k="show_on_catalog" ${p.show_on_catalog ? 'checked' : ''}> แสดงสินค้านี้ในเมนูลูกค้า</label>
+    <div class="row" style="margin-top:10px;flex-wrap:nowrap;align-items:flex-start"><div id="pimg" class="pimg">${/^rtdb:/.test(p.image_url || '') ? '<span class="small muted">กำลังโหลด…</span>' : '<span class="small muted">ยังไม่มีรูป</span>'}</div>
+      <div class="stack" style="gap:6px"><label class="btn sm">📷 เลือกรูป<input type="file" accept="image/*" hidden onchange="pickProductImage(this)"></label>${p.image_url ? `<button class="btn sm danger" onclick="PIMG='remove';$('#pimg').innerHTML='<span class=&quot;small muted&quot;>จะลบรูปเมื่อบันทึก</span>'">ลบรูป</button>` : ''}<span class="small muted" id="pimgsz">ระบบย่อรูปให้อัตโนมัติ (320px + 900px)</span></div></div>
+    <div class="fgrid" style="margin-top:10px">
+      <label class="f">Slug (ใช้ในลิงก์)<input class="in" data-k="slug" value="${esc(p.slug || (id ? id.toLowerCase() : ''))}" placeholder="เช่น banana-squid-xl" autocapitalize="off"></label>
+      <label class="f">สถานะในเมนู<select class="in" data-k="catalog_status">${[['auto', 'อัตโนมัติจากสต็อก'], ['available', '🟢 มีสินค้า'], ['low', '🟡 เหลือจำกัด'], ['soldout', '🔴 หมดชั่วคราว'], ['preorder', '🔵 สั่งจองล่วงหน้า']].map(([k, l]) => `<option value="${k}" ${ov === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      <label class="f">🟡 เหลือจำกัดเมื่อเหลือ ≤ (${piece ? 'ตัว' : 'kg'})<input class="in num" type="number" inputmode="decimal" min="0" step="${piece ? 1 : 0.1}" data-k="catalog_low_threshold_ui" value="${p.catalog_low_threshold ? (piece ? p.catalog_low_threshold : p.catalog_low_threshold / 1000) : ''}" placeholder="${piece ? t.low : t.low / 1000}"></label>
+      ${piece ? '' : `<label class="f">🔴 หมดเมื่อน้อยกว่า (kg) = ขั้นต่ำการสั่ง<input class="in num" type="number" inputmode="decimal" min="0" step="0.1" data-k="catalog_min_order_ui" value="${p.catalog_min_order ? p.catalog_min_order / 1000 : ''}" placeholder="${t.min / 1000}"></label>`}
+    </div>
+    <label class="f" style="margin-top:10px">รายละเอียดสั้นสำหรับลูกค้า<textarea class="in" data-k="catalog_description" style="min-height:70px" maxlength="600">${esc(p.catalog_description || '')}</textarea></label>
+    <label class="f" style="margin-top:10px">จุดเด่น (บรรทัดละข้อ)<textarea class="in" data-k="catalog_highlights" style="min-height:70px" placeholder="สดจากเรือ&#10;แช่แข็งทันทีหลังขึ้นท่า">${esc(p.catalog_highlights || '')}</textarea></label>
+    <label class="row small" style="margin-top:10px"><input type="checkbox" class="ck" data-k="catalog_featured" ${p.catalog_featured ? 'checked' : ''}> ⭐ สินค้าแนะนำ (หน้าแรกของเมนู)</label>
+    ${id ? `<div class="note" style="margin-top:10px">สถานะในเมนูตอนนี้: <b>${CAT_STATUS[catalogStatus(p)]}</b>${stockOn(p) ? ` · ขายได้ทาง LINE ${fmtQ(p, stockOf(p.id).sell.LINE)} (ลูกค้าไม่เห็นตัวเลขนี้)` : ''}</div>` : ''}`;
+}
+const menuUrl = () => location.origin + location.pathname.replace(/[^/]*$/, '') + 'menu/';
+function menuCard() {
+  const c = DB.settings.catalog || {}, n = DB.products.filter(p => p.active && p.show_on_catalog).length;
+  return `<div class="card"><h3>🛍 Digital Menu</h3>
+    <div class="row" style="margin-bottom:12px"><a class="btn sm pri" href="${menuUrl()}" target="_blank" rel="noopener">เปิดเมนูลูกค้า ↗</a><button class="btn sm" onclick="copyText(menuUrl())">🔗 คัดลอกลิงก์</button><span class="small muted">แสดงอยู่ ${n} สินค้า · เลือกสินค้าที่แสดงได้ในหน้า Products</span></div>
+    <div class="fgrid"><label class="f">LINE OA ID (ปุ่มสั่งซื้อ)<input class="in" data-p="catalog.line_id" value="${esc(c.line_id || DB.settings.store.line || '')}" placeholder="@taikongseafood"></label>
+      <label class="f">คำโปรยหน้าแรก<input class="in" data-p="catalog.tagline" value="${esc(c.tagline || '')}" placeholder="ของทะเลสด คัดเกรด แช่แข็งพร้อมส่ง"></label>
+      <label class="f">รูป Hero (ไฟล์ใน GitHub เช่น hero.jpg)<input class="in" data-p="catalog.hero_url" value="${esc(c.hero_url || '')}" placeholder="hero.jpg"></label></div>
+    <label class="f" style="margin-top:10px">วิธีแพ็ก<textarea class="in" data-p="catalog.packing_text" style="min-height:60px" placeholder="แพ็กสุญญากาศ + กล่องโฟม + เจลเย็น">${esc(c.packing_text || '')}</textarea></label>
+    <label class="f" style="margin-top:10px">ค่าจัดส่ง / เงื่อนไข<textarea class="in" data-p="catalog.shipping_text" style="min-height:60px" placeholder="ส่งทั่วไทยด้วยรถห้องเย็น">${esc(c.shipping_text || '')}</textarea></label></div>`;
+}
+
 /* ---------- Render ---------- */
 function render() {
   if (!READY || !DB) { $('#root').innerHTML = authScreen(); return; }
@@ -2143,7 +2292,9 @@ function boot() {
     stopRole = ROLE === 'owner'
       ? Backend.on('admins', v => { ADMINS = v || {}; ADMINS_ERR = ''; if (READY && location.hash.startsWith('#/settings')) render(); }, e => { ADMINS_ERR = e.code || e.message || 'permission_denied'; if (READY) render(); })
       : Backend.on('admins/' + emailKey(email), v => { if (!v) { AUTHERR = 'สิทธิ์การเข้าใช้งานของคุณถูกยกเลิกแล้ว'; logout(); } }, () => logout());
-    STOP = Backend.listen(onRemote, e => { AUTHSTATE = 'signedout'; AUTHERR = 'อ่านข้อมูลไม่ได้ (' + (e.code || e.message) + ') ตรวจสอบ Security Rules'; USER = null; render(); });
+    const stopCat = Backend.on('public/catalog', v => { SERVER_CAT = v || null; scheduleHeal(); }, () => {});
+    const stopMain = Backend.listen(onRemote, e => { AUTHSTATE = 'signedout'; AUTHERR = 'อ่านข้อมูลไม่ได้ (' + (e.code || e.message) + ') ตรวจสอบ Security Rules'; USER = null; render(); });
+    STOP = () => { stopMain(); stopCat(); SERVER_CAT = undefined; clearTimeout(HEAL_T); };
   });
 }
 boot();
