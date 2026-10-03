@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ไต้ก๋ง ซีฟู้ด · เมนูของทะเล</title>
+<meta name="description" content="ของทะเลสด คัดเกรด แช่แข็งพร้อมส่ง · ดูสินค้าและราคา แล้วสั่งซื้อผ่าน LINE">
+<meta property="og:title" content="ไต้ก๋ง ซีฟู้ด · เมนูของทะเล">
+<meta property="og:description" content="ดูสินค้า ราคา และสถานะสินค้า แล้วสั่งซื้อผ่าน LINE">
+<meta name="theme-color" content="#0B2545">
+<link rel="icon" type="image/png" href="../icon-192.png">
+<link rel="apple-touch-icon" href="../apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://taikong-seafood-back-office-default-rtdb.asia-southeast1.firebasedatabase.app">
+<style>
+:root{--bg:#EEF5FC;--surface:#fff;--surface-2:#F6FAFE;--line:#D9E6F3;--ink:#0B2545;--ink-2:#3C5573;--ink-3:#7489A3;--blue:#1668E3;--blue-soft:#E3EEFD;--navy:#0B2545;
+  --green:#12925B;--green-soft:#E3F5EC;--amber:#B26A00;--amber-soft:#FFF3D6;--red:#D83A3A;--red-soft:#FDECEC;--line-green:#06C755;
+  --font:'IBM Plex Sans','IBM Plex Sans Thai',system-ui,-apple-system,'Segoe UI',Tahoma,sans-serif;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#07172B;--surface:#0E2340;--surface-2:#112A4B;--line:#1E3A60;--ink:#EAF2FC;--ink-2:#B3C6DD;--ink-3:#7F97B4;--blue:#4C8FF5;--blue-soft:#15335E;--green-soft:#0F3326;--amber-soft:#3A2C10;--amber:#F2B544;--red-soft:#3A1A1F}}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit}
+.num{font-variant-numeric:tabular-nums}
+.wrap{max-width:720px;margin:0 auto;padding:0 16px calc(110px + env(safe-area-inset-bottom,0px))}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+/* top bar */
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:saturate(1.4) blur(10px);-webkit-backdrop-filter:saturate(1.4) blur(10px);border-bottom:1px solid var(--line)}
+.bar .in{max-width:720px;margin:0 auto;display:flex;align-items:center;gap:10px;padding:10px 16px}
+.logo{width:36px;height:36px;border-radius:10px;background:var(--blue);display:grid;place-items:center;font-size:19px;overflow:hidden;flex:none}
+.logo img{width:100%;height:100%;object-fit:cover}
+.brand b{display:block;font-size:14.5px;letter-spacing:.04em;line-height:1.2}
+.brand small{color:var(--ink-3);font-size:12px}
+.grow{flex:1}
+.back{border:0;background:var(--surface);border:1px solid var(--line);border-radius:10px;min-height:38px;padding:0 12px;cursor:pointer;font-weight:500}
+.linebtn{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:var(--line-green);color:#fff;border:0;border-radius:12px;font-weight:600;cursor:pointer;min-height:40px;padding:0 14px}
+.linebtn svg{flex:none}
+.linebtn.lg{min-height:52px;font-size:16px;border-radius:14px;width:100%}
+/* hero */
+.hero{margin:16px 0 4px;border-radius:22px;overflow:hidden;position:relative;background:var(--navy);color:#fff;min-height:200px;display:flex;align-items:flex-end}
+.hero .bgimg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(11,37,69,.05) 0%,rgba(11,37,69,.88) 100%)}
+.hero .waves{position:absolute;inset:auto 0 0 0;opacity:.35}
+.hero .txt{position:relative;z-index:1;padding:22px}
+.hero h1{margin:0 0 6px;font-size:26px;line-height:1.3;font-weight:700}
+.hero p{margin:0 0 14px;color:#C9D8EA;font-size:14.5px}
+/* chips */
+.chips{display:flex;gap:8px;overflow-x:auto;padding:14px 0 4px;margin:0 -16px;padding-left:16px;padding-right:16px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:8px 14px;min-height:40px;font-weight:500;cursor:pointer;white-space:nowrap}
+.chip.on{background:var(--navy);border-color:var(--navy);color:#fff}
+/* sections */
+h2.sec{font-size:18px;margin:22px 0 10px;display:flex;align-items:center;gap:8px}
+h2.sec .more{margin-left:auto;font-size:13.5px;color:var(--blue);font-weight:500}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-3);margin:6px 0 0}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media (min-width:600px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.hscroll{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(150px,42%);gap:12px;overflow-x:auto;margin:0 -16px;padding:0 16px 4px;scroll-snap-type:x mandatory;scrollbar-width:none}
+.hscroll::-webkit-scrollbar{display:none}
+.hscroll .card{scroll-snap-align:start}
+@media (min-width:600px){.hscroll{grid-auto-columns:minmax(170px,30%)}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden;display:flex;flex-direction:column;cursor:pointer;transition:transform .15s}
+.card:active{transform:scale(.98)}
+.card.out{opacity:.62}
+.ph{aspect-ratio:1/1;background:var(--surface-2);position:relative;display:grid;place-items:center;font-size:44px}
+.ph img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .25s}
+.ph img.ok{opacity:1}
+.st{position:absolute;left:8px;top:8px;font-size:11.5px;font-weight:600;border-radius:99px;padding:2px 9px;background:var(--surface);box-shadow:0 1px 4px rgba(0,0,0,.12);z-index:1}
+.st.available{color:var(--green)} .st.low{color:var(--amber)} .st.soldout{color:var(--red)} .st.preorder{color:var(--blue)} .st.ask{color:var(--ink-2)}
+.card .b{padding:10px 12px 12px;display:flex;flex-direction:column;gap:2px;flex:1}
+.card .nm{font-weight:600;line-height:1.35}
+.card .sz{font-size:12.5px;color:var(--ink-3)}
+.card .pr{margin-top:auto;padding-top:6px;font-weight:700;color:var(--blue)}
+.card .pr small{color:var(--ink-3);font-weight:400}
+.new{position:absolute;left:8px;bottom:8px;background:var(--blue);color:#fff;font-size:11px;font-weight:600;border-radius:99px;padding:2px 8px;z-index:1}
+/* detail */
+.dimg{margin:14px -16px 0;aspect-ratio:1/1;max-height:62vh;background:var(--surface-2);position:relative;display:grid;place-items:center;font-size:80px;overflow:hidden}
+@media (min-width:600px){.dimg{margin:16px 0 0;border-radius:20px}}
+.dimg img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.dimg img.lq{filter:blur(8px);transform:scale(1.04)}
+.d h1{font-size:24px;margin:16px 0 2px;line-height:1.3}
+.d .sz{color:var(--ink-2)}
+.pill{display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:13.5px;border-radius:99px;padding:4px 12px;margin-top:10px}
+.pill.available{background:var(--green-soft);color:var(--green)} .pill.low{background:var(--amber-soft);color:var(--amber)} .pill.soldout{background:var(--red-soft);color:var(--red)} .pill.preorder{background:var(--blue-soft);color:var(--blue)} .pill.ask{background:var(--surface-2);color:var(--ink-2)}
+.box{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px 16px;margin-top:14px}
+.box h3{margin:0 0 8px;font-size:15px}
+.ptab{width:100%;border-collapse:collapse}
+.ptab td{padding:8px 0;border-bottom:1px dashed var(--line)}
+.ptab tr:last-child td{border-bottom:0}
+.ptab td:last-child{text-align:right;font-weight:700}
+.ptab .best td:last-child{color:var(--blue)}
+.hl{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.hl li{display:flex;gap:8px}.hl li::before{content:"✓";color:var(--green);font-weight:700}
+.pre{white-space:pre-line;color:var(--ink-2)}
+.sticky{position:fixed;left:0;right:0;bottom:0;z-index:30;background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-top:1px solid var(--line);padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px))}
+.sticky .in{max-width:720px;margin:0 auto}
+.note{font-size:12.5px;color:var(--ink-3);text-align:center;margin-top:6px}
+.foot{text-align:center;color:var(--ink-3);font-size:13px;margin:30px 0 0}
+.empty{text-align:center;color:var(--ink-3);padding:40px 10px}
+.sk{background:linear-gradient(90deg,var(--surface-2),var(--line),var(--surface-2));background-size:200% 100%;animation:sk 1.2s infinite;border-radius:16px}
+@keyframes sk{to{background-position:-200% 0}}
+</style>
+</head>
+<body>
+<div id="app"><div class="wrap"><div class="sk" style="height:200px;margin-top:16px"></div><div class="grid" style="margin-top:16px"><div class="sk" style="height:220px"></div><div class="sk" style="height:220px"></div></div></div></div>
+<script>
+/* Taikong Seafood · Digital Menu (สาธารณะ ไม่ต้องล็อกอิน)
+   อ่านเฉพาะ public/catalog และ public/catalog_images/{slug} ผ่าน Firebase REST — ไม่มีสิทธิ์อ่าน private ใด ๆ */
+const DB_URL = 'https://taikong-seafood-back-office-default-rtdb.asia-southeast1.firebasedatabase.app';
+const CAT_EMOJI = {'กุ้ง':'🦐', 'หมึก':'🦑', 'ปลา':'🐟', 'อื่น ๆ':'🦀'};
+const ST = {available:'🟢 มีสินค้า', low:'🟡 เหลือจำนวนจำกัด', soldout:'🔴 หมดชั่วคราว', preorder:'🔵 สั่งจองล่วงหน้า', ask:'💬 สอบถามทาง LINE'};
+const ST_ORDER = {available:0, low:1, preorder:2, ask:3, soldout:4};
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[c]));
+const baht = n => { const v = Math.round((+n || 0) * 100) / 100; return '฿' + v.toLocaleString('th-TH', {minimumFractionDigits:Number.isInteger(v) ? 0 : 2, maximumFractionDigits:2}); };
+const pad = n => String(n).padStart(2, '0');
+const ymd = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+const LINE_SVG = '<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M12 3C6.5 3 2 6.6 2 11c0 3.9 3.5 7.2 8.3 7.9.3.1.8.2.9.5.1.3.1.7 0 1l-.1.9c0 .3-.2 1 .9.5s5.9-3.5 8-6C21.4 14.2 22 12.7 22 11c0-4.4-4.5-8-10-8z"/></svg>';
+let CAT = null, LOADED_AT = 0;
+
+/* ---------- LINE: เปิดแชต OA พร้อมข้อความ (encode ถูกต้อง) ---------- */
+function lineUrl(text) {
+  const id = (CAT.meta.line_id || '').trim(); if (!id) return '';
+  const acct = id.startsWith('@') ? id : '@' + id;
+  return 'https://line.me/R/oaMessage/' + encodeURIComponent(acct).replace(/^%40/, '@') + '/?' + encodeURIComponent(text);
+}
+const lineBtn = (text, cls = '') => { const u = lineUrl(text); return u ? `<a class="linebtn ${cls}" href="${esc(u)}" target="_blank" rel="noopener">${LINE_SVG} สั่งซื้อ / สอบถามผ่าน LINE</a>` : ''; };
+
+/* ---------- Data ---------- */
+async function load() {
+  const r = await fetch(DB_URL + '/public/catalog.json', {cache:'no-store'}); if (!r.ok) throw new Error('HTTP ' + r.status);
+  const c = await r.json() || {}; c.meta = c.meta || {};
+  c.list = Object.values(c.products || {}).filter(p => p && p.slug && p.name).map(p => ({...p, prices:p.prices || {}, highlights:Object.values(p.highlights || {})}));
+  c.list.sort((a, b) => (ST_ORDER[a.status] ?? 9) - (ST_ORDER[b.status] ?? 9) || (a.sort ?? 0) - (b.sort ?? 0));
+  CAT = c; LOADED_AT = Date.now();
+}
+/* รูป: ดึงทีละใบเมื่อเลื่อนมาเห็น (lazy) + cache ในเครื่องตามเวอร์ชันรูป */
+const IMGMEM = {};
+async function getImg(slug, size, v) {
+  const key = `tkimg:${slug}:${size}`, mem = IMGMEM[key]; if (mem && mem.v === v) return mem.data;
+  try { const c = JSON.parse(localStorage.getItem(key) || 'null'); if (c && c.v === v) { IMGMEM[key] = c; return c.data; } } catch (e) {}
+  const r = await fetch(`${DB_URL}/public/catalog_images/${encodeURIComponent(slug)}/${size}.json`); if (!r.ok) return null;
+  const j = await r.json(); if (!j || typeof j.data !== 'string' || !j.data.startsWith('data:image/')) return null;
+  const rec = {v, data:j.data}; IMGMEM[key] = rec;
+  try { localStorage.setItem(key, JSON.stringify(rec)); } catch (e) { try { Object.keys(localStorage).filter(k => k.startsWith('tkimg:')).forEach(k => localStorage.removeItem(k)); } catch (_) {} }
+  return rec.data;
+}
+let IO = null;
+function lazyImages() {
+  if (IO) IO.disconnect();
+  const show = async el => { const d = await getImg(el.dataset.slug, el.dataset.size, +el.dataset.v); if (d) { el.src = d; el.onload = () => el.classList.add('ok'); } };
+  const els = document.querySelectorAll('img[data-slug]:not([src])');
+  if (!('IntersectionObserver' in window)) return els.forEach(show);
+  IO = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { IO.unobserve(e.target); show(e.target); } }), {rootMargin:'200px'});
+  els.forEach(el => IO.observe(el));
+}
+
+/* ---------- Views ---------- */
+const isNew = p => { if (!p.last_received) return false; const d = new Date(); const t = ymd(d); d.setDate(d.getDate() - 2); return p.last_received >= ymd(d) && p.last_received <= t; };
+const isToday = p => p.last_received === ymd(new Date());
+const unit = p => p.unit === 'ตัว' ? 'ตัว' : 'kg';
+function card(p) {
+  return `<a class="card ${p.status === 'soldout' ? 'out' : ''}" href="?p=${encodeURIComponent(p.slug)}" data-nav>
+    <div class="ph">${CAT_EMOJI[p.category] || '🐟'}${p.image_v ? `<img alt="${esc(p.name)}" data-slug="${esc(p.slug)}" data-size="thumb" data-v="${p.image_v}">` : ''}<span class="st ${esc(p.status)}">${ST[p.status] || ''}</span>${isNew(p) ? '<span class="new">เข้าใหม่</span>' : ''}</div>
+    <div class="b"><div class="nm">${esc(p.name)}</div>${p.size ? `<div class="sz">${esc(p.size)}</div>` : ''}<div class="pr num">${p.prices.p1 ? baht(p.prices.p1) + `<small>/${unit(p)}</small>` : '<small>สอบถามราคา</small>'}</div></div></a>`;
+}
+function topbar(back) {
+  const m = CAT.meta;
+  return `<header class="bar"><div class="in">${back ? `<button class="back" onclick="goBack()" aria-label="ย้อนกลับ">‹ กลับ</button>` : `<div class="logo">${m.logo && m.logo.startsWith('data:image/') ? `<img src="${m.logo}" alt="">` : '🦐'}</div><div class="brand"><b>${esc(m.name_en || 'TAIKONG SEAFOOD')}</b><small>${esc(m.name || 'ไต้ก๋ง ซีฟู้ด')}</small></div>`}<div class="grow"></div>${lineUrl('') ? `<a class="linebtn" href="${esc(lineUrl('สวัสดีค่ะ สนใจสั่งของทะเล'))}" target="_blank" rel="noopener" aria-label="LINE">${LINE_SVG} LINE</a>` : ''}</div></header>`;
+}
+function chips(active) {
+  const cats = [...new Set(CAT.list.map(p => p.category).filter(Boolean))];
+  return `<nav class="chips" aria-label="หมวดสินค้า"><a class="chip ${active === 'all' ? 'on' : ''}" href="?c=all" data-nav>ทั้งหมด</a>${cats.map(c => `<a class="chip ${active === c ? 'on' : ''}" href="?c=${encodeURIComponent(c)}" data-nav>${CAT_EMOJI[c] || ''} ${esc(c)}</a>`).join('')}</nav>`;
+}
+const legend = () => `<div class="legend"><span>${ST.available}</span><span>${ST.low}</span><span>${ST.soldout}</span></div>`;
+function vHome() {
+  const m = CAT.meta, L = CAT.list;
+  const today = L.filter(isToday), fresh = today.length ? today : L.filter(isNew), feat = L.filter(p => p.featured);
+  const hero = m.hero_url && /^[\w./-]+$/.test(m.hero_url) ? `<img class="bgimg" src="../${esc(m.hero_url.replace(/^\.?\//, ''))}" alt="" onerror="this.remove()">` : '';
+  return `${topbar(false)}<main class="wrap">
+    <section class="hero">${hero}<svg class="waves" viewBox="0 0 400 80" preserveAspectRatio="none" width="100%" height="80" aria-hidden="true"><path d="M0 40 Q50 10 100 40 T200 40 T300 40 T400 40 V80 H0Z" fill="#1668E3"/><path d="M0 55 Q50 30 100 55 T200 55 T300 55 T400 55 V80 H0Z" fill="#4C8FF5" opacity=".6"/></svg>
+      <div class="txt"><h1>${esc(m.tagline || 'ของทะเลสด คัดเกรด แช่แข็งพร้อมส่ง')}</h1><p>เลือกดูสินค้าและราคา แล้วทักสั่งซื้อทาง LINE ได้เลย</p>${lineBtn('สวัสดีค่ะ สนใจสั่งของทะเล')}</div></section>
+    ${chips('')}
+    ${fresh.length ? `<h2 class="sec">🌊 ${today.length ? 'ของทะเลวันนี้' : 'เข้าใหม่ล่าสุด'}<a class="more" href="?c=all" data-nav>ดูทั้งหมด ›</a></h2><div class="hscroll">${fresh.map(card).join('')}</div>` : ''}
+    ${feat.length ? `<h2 class="sec">⭐ สินค้าแนะนำ</h2><div class="hscroll">${feat.map(card).join('')}</div>` : ''}
+    <h2 class="sec">สินค้าทั้งหมด <span style="font-weight:400;color:var(--ink-3);font-size:14px">${L.length} รายการ</span></h2>${legend()}
+    ${L.length ? `<div class="grid" style="margin-top:12px">${L.map(card).join('')}</div>` : '<div class="empty">ยังไม่มีสินค้าในเมนู</div>'}
+    <p class="foot">${esc(m.name || 'ไต้ก๋ง ซีฟู้ด')}${m.phone ? ' · ' + esc(m.phone) : ''}${m.line_id ? ' · LINE ' + esc(m.line_id) : ''}<br>ราคาและสถานะอัปเดตจากร้านโดยตรง</p></main>`;
+}
+function vList(c) {
+  const L = c === 'all' ? CAT.list : CAT.list.filter(p => p.category === c);
+  return `${topbar(true)}<main class="wrap"><h2 class="sec" style="margin-top:16px">${c === 'all' ? 'สินค้าทั้งหมด' : (CAT_EMOJI[c] || '') + ' ' + esc(c)}</h2>${chips(c)}${legend()}
+    ${L.length ? `<div class="grid" style="margin-top:12px">${L.map(card).join('')}</div>` : '<div class="empty">ยังไม่มีสินค้าในหมวดนี้</div>'}</main>`;
+}
+function vDetail(slug) {
+  const p = CAT.list.find(x => x.slug === slug);
+  if (!p) return `${topbar(true)}<main class="wrap"><div class="empty">ไม่พบสินค้านี้ หรือสินค้าถูกนำออกจากเมนูแล้ว<br><br><a class="chip on" href="?c=all" data-nav>ดูสินค้าทั้งหมด</a></div></main>`;
+  const m = CAT.meta, u = unit(p), pr = p.prices;
+  const tiers = u === 'kg' ? [['1 kg', pr.p1], ['5 kg ขึ้นไป', pr.p5], ['10 kg ขึ้นไป', pr.p10], ['20 kg ขึ้นไป', pr.p20]].filter(x => +x[1] > 0) : [['ราคา / ตัว', pr.p1]].filter(x => +x[1] > 0);
+  const best = tiers.length > 1 ? Math.min(...tiers.map(t => +t[1])) : null;
+  const msg = `สนใจ ${p.name}${p.size ? ' ' + p.size : ''}`;
+  document.title = `${p.name}${p.size ? ' ' + p.size : ''} · ${m.name || 'ไต้ก๋ง ซีฟู้ด'}`;
+  setTimeout(async () => { if (!p.image_v) return; const el = $('#dimg'); const th = await getImg(p.slug, 'thumb', p.image_v); if (th && el && !el.dataset.full) { el.innerHTML += `<img class="lq" src="${th}" alt="">`; }
+    const lg = await getImg(p.slug, 'large', p.image_v); if (lg && el) { el.dataset.full = 1; el.innerHTML = `<img src="${lg}" alt="${esc(p.name)}">`; } }, 0);
+  return `${topbar(true)}<main class="wrap d">
+    <div class="dimg" id="dimg">${CAT_EMOJI[p.category] || '🐟'}</div>
+    <h1>${esc(p.name)}</h1>${p.size ? `<div class="sz">${esc(p.size)}</div>` : ''}
+    <span class="pill ${esc(p.status)}">${ST[p.status] || ''}</span>
+    ${tiers.length ? `<div class="box"><h3>ราคา</h3><table class="ptab num">${tiers.map(t => `<tr class="${+t[1] === best ? 'best' : ''}"><td>${t[0]}</td><td>${baht(t[1])}<span style="font-weight:400;color:var(--ink-3)">/${u}</span></td></tr>`).join('')}</table></div>` : ''}
+    ${p.description ? `<div class="box"><h3>รายละเอียด</h3><div class="pre">${esc(p.description)}</div></div>` : ''}
+    ${p.highlights.length ? `<div class="box"><h3>จุดเด่น</h3><ul class="hl">${p.highlights.map(h => `<li>${esc(h)}</li>`).join('')}</ul></div>` : ''}
+    ${m.packing_text ? `<div class="box"><h3>📦 วิธีแพ็ก</h3><div class="pre">${esc(m.packing_text)}</div></div>` : ''}
+    ${m.shipping_text || m.shipping_fee ? `<div class="box"><h3>🚚 ค่าจัดส่ง</h3><div class="pre">${m.shipping_fee ? `ค่าส่งเริ่มต้น ${baht(m.shipping_fee)}` : ''}${m.shipping_fee && m.shipping_text ? '\n' : ''}${esc(m.shipping_text || '')}</div></div>` : ''}
+  </main>
+  ${lineUrl('') ? `<div class="sticky"><div class="in">${lineBtn(msg, 'lg')}<div class="note">${p.status === 'soldout' ? 'สินค้าหมดชั่วคราว · ทักถามรอบเข้าของถัดไปได้' : 'ระบบจะเปิด LINE พร้อมข้อความ "' + esc(msg) + '"'}</div></div></div>` : ''}`;
+}
+
+/* ---------- Router ---------- */
+function render() {
+  const q = new URLSearchParams(location.search), app = $('#app');
+  if (!q.get('p')) document.title = (CAT.meta.name || 'ไต้ก๋ง ซีฟู้ด') + ' · เมนูของทะเล';
+  app.innerHTML = q.get('p') ? vDetail(q.get('p')) : q.get('c') ? vList(q.get('c')) : vHome();
+  lazyImages();
+}
+function nav(href) { history.pushState({}, '', href); render(); scrollTo(0, 0); }
+function goBack() { if (history.state && history.length > 1) history.back(); else nav(location.pathname); }
+document.addEventListener('click', e => { const a = e.target.closest('a[data-nav]'); if (!a || e.metaKey || e.ctrlKey) return; e.preventDefault(); nav(a.getAttribute('href')); });
+addEventListener('popstate', render);
+/* โหลดใหม่เมื่อกลับมาที่แท็บ (สถานะสินค้าเป็นปัจจุบันเสมอ) */
+document.addEventListener('visibilitychange', async () => { if (!document.hidden && CAT && Date.now() - LOADED_AT > 60000) { try { await load(); const y = scrollY; render(); scrollTo(0, y); } catch (e) {} } });
+(async function start() {
+  try { await load(); render(); }
+  catch (e) { $('#app').innerHTML = `<div class="wrap"><div class="empty">โหลดเมนูไม่สำเร็จ<br><span style="font-size:13px">ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่</span><br><br><button class="chip on" onclick="location.reload()">ลองใหม่</button></div></div>`; }
+})();
+</script>
+</body>
+</html>
