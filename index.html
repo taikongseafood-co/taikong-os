@@ -1204,8 +1204,8 @@ function productModal(id) {
   PIMG = null;
   const p = id ? P(id) : {name:'', category:'กุ้ง', size:'', unit:'kg', retail_price:0, price_5kg:0, price_10kg:0, price_20kg:0, cost_per_unit:0, yield_percent:100, packaging_cost:0, active:true, notes:''};
   const f = (k, l, t = 'number') => `<label class="f">${l}<input class="in ${t === 'number' ? 'num' : ''}" type="${t}" data-k="${k}" value="${esc(p[k])}"></label>`;
-  modal(id ? 'แก้ไขสินค้า' : 'เพิ่มสินค้า', `<div class="fgrid">${f('name', 'ชื่อสินค้า', 'text')}${f('size', 'ขนาด', 'text')}<label class="f">หมวด<select class="in" data-k="category">${CATS.map(c => `<option ${c === p.category ? 'selected' : ''}>${c}</option>`).join('')}</select></label>${f('unit', 'หน่วยขาย (kg / ตัว)', 'text')}
-    <label class="f">วิธีนับสต็อก<select class="in" data-k="stock_type" ${id && DB.stock_lots.some(l => l.product_id === id) ? 'disabled' : ''} onchange="if(this.value==='PIECE_AND_WEIGHT')$('#ov [data-k=unit]').value='ตัว'">${Object.entries(STYPE).map(([k, l]) => `<option value="${k}" ${(p.stock_type || 'WEIGHT_ONLY') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
+  modal(id ? 'แก้ไขสินค้า' : 'เพิ่มสินค้า', `<div class="fgrid">${f('name', 'ชื่อสินค้า', 'text')}${f('size', 'ขนาด', 'text')}<label class="f">หมวด<select class="in" data-k="category">${CATS.map(c => `<option ${c === p.category ? 'selected' : ''}>${c}</option>`).join('')}</select></label><label class="f">หน่วยขาย<select class="in" data-k="unit" onchange="const st=$('#ov [data-k=stock_type]');if(this.value==='ตัว'&&st&&!st.disabled)st.value='PIECE_AND_WEIGHT';if(this.value==='kg'&&st&&!st.disabled&&st.value==='PIECE_AND_WEIGHT')st.value='WEIGHT_ONLY'">${['kg', 'ตัว'].map(u => `<option ${saleUnit(p) === u ? 'selected' : ''}>${u}</option>`).join('')}</select></label>
+    <label class="f">วิธีนับสต็อก<select class="in" data-k="stock_type" ${id && DB.stock_lots.some(l => l.product_id === id) ? 'disabled' : ''} onchange="$('#ov [data-k=unit]').value=this.value==='PIECE_AND_WEIGHT'?'ตัว':'kg'">${Object.entries(STYPE).map(([k, l]) => `<option value="${k}" ${(p.stock_type || 'WEIGHT_ONLY') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
     <p class="small muted" style="margin:6px 0 0">"ขนาด" คือ Size grade เช่น 10–12 ตัว/kg ไม่ใช่จำนวนในสต็อก</p>
     <h4 style="margin:16px 0 8px;font-size:14px">ราคาขาย / kg</h4><div class="fgrid">${f('retail_price', 'ปลีก')}${f('price_5kg', '5kg ขึ้นไป')}${f('price_10kg', '10kg ขึ้นไป')}${f('price_20kg', '20kg ขึ้นไป')}</div>
     <h4 style="margin:16px 0 8px;font-size:14px">ต้นทุน</h4><div class="fgrid">${f('cost_per_unit', 'ต้นทุน / kg')}${f('yield_percent', 'Yield %')}</div>
@@ -2117,35 +2117,42 @@ function vStockProduct(pid) {
 const CAT_DEFAULTS = {WEIGHT_ONLY:{low:3000, min:1000}, SIZE_GRADE_WEIGHT:{low:3000, min:1000}, PIECE_AND_WEIGHT:{low:3, min:1}};
 const CAT_STATUS = {available:'🟢 มีสินค้า', low:'🟡 เหลือจำนวนจำกัด', soldout:'🔴 หมดชั่วคราว', preorder:'🔵 สั่งจองล่วงหน้า', ask:'💬 สอบถามทาง LINE'};
 const slugOk = s => /^[a-z0-9-]{2,60}$/.test(s || '');
+/* หน่วยขาย (Source of Truth สำหรับการแสดงผล): สินค้านับตัว หรือสินค้าที่ตั้งหน่วยขายเป็น "ตัว" → ตัว · อื่น ๆ → kg */
+const saleUnit = p => isPiece(p) || /ตัว|ชิ้น|pcs|piece/i.test(String(p.unit || '')) ? 'ตัว' : 'kg';
+const unitMismatch = p => saleUnit(p) === 'ตัว' && !isPiece(p);   // ขายเป็นตัว แต่สต็อกนับเป็นน้ำหนัก → นับจำนวนตัวไม่ได้
+const CAT_SLUG = {'หมึก':'squid', 'กุ้ง':'shrimp', 'ปลา':'fish', 'ปู':'crab', 'อื่น ๆ':'other'};
 const slugOf = p => slugOk(p.slug) ? p.slug : p.id.toLowerCase();
-const catThresholds = p => { const d = CAT_DEFAULTS[p.stock_type || 'WEIGHT_ONLY'] || CAT_DEFAULTS.WEIGHT_ONLY;
-  return {low:+p.catalog_low_threshold > 0 ? +p.catalog_low_threshold : d.low, min:isPiece(p) ? 1 : (+p.catalog_min_order > 0 ? +p.catalog_min_order : d.min)}; };
+const catThresholds = p => { const d = CAT_DEFAULTS[saleUnit(p) === 'ตัว' ? 'PIECE_AND_WEIGHT' : (p.stock_type || 'WEIGHT_ONLY')] || CAT_DEFAULTS.WEIGHT_ONLY;
+  return {low:+p.catalog_low_threshold > 0 ? +p.catalog_low_threshold : d.low, min:saleUnit(p) === 'ตัว' ? 1 : (+p.catalog_min_order > 0 ? +p.catalog_min_order : d.min)}; };
 function catalogStatus(p) {
   const ov = p.catalog_status || 'auto'; if (ov !== 'auto') return ov;
-  if (!stockOn(p)) return 'ask';
-  const q = stockOf(p.id).sell.LINE, t = catThresholds(p);
+  if (!stockOn(p) || unitMismatch(p)) return 'ask';
+  const q = stockOf(p.id).sell.LINE, t = catThresholds(p);            // ตัว: q = จำนวนตัว · kg: q = กรัม (หน่วยฐานของระบบ Stock เดิม)
   return q < t.min ? 'soldout' : q <= t.low ? 'low' : 'available';
 }
 function lastReceived(pid) { let d = null; DB.stock_lots.forEach(l => { if (l.product_id === pid && (!d || l.received_at > d)) d = l.received_at; }); return d; }
-/* allowlist: สร้าง object ใหม่ทีละ field — ไม่มีการคัดลอก product ทั้งก้อน */
+/* allowlist: สร้าง object ใหม่ทีละ field — ไม่มีการคัดลอก product ทั้งก้อน · ราคาเปิดเฉพาะ retail_price */
 function catalogProduct(p, i) {
-  const piece = isPiece(p), num = x => Math.round((+x || 0) * 100) / 100;
-  const prices = piece ? {p1:num(p.retail_price)} : {p1:num(p.retail_price), p5:num(p.price_5kg), p10:num(p.price_10kg), p20:num(p.price_20kg)};
-  const img = /^rtdb:/.test(p.image_url || '') ? +((p.image_url.split('v=')[1]) || 1) : 0;
+  const u = saleUnit(p), img = /^rtdb:/.test(p.image_url || '') ? +((p.image_url.split('v=')[1]) || 1) : 0;
   const hl = String(p.catalog_highlights || '').split('\n').map(s => s.trim()).filter(Boolean).slice(0, 8);
-  return {slug:slugOf(p), name:String(p.name || ''), size:String(p.size || ''), category:String(p.category || ''), unit:piece ? 'ตัว' : 'kg',
-    prices, description:String(p.catalog_description || '').slice(0, 600), highlights:hl, featured:!!p.catalog_featured,
-    status:catalogStatus(p), last_received:lastReceived(p.id) || '', image_v:img, sort:i};
+  const o = {slug:slugOf(p), name:String(p.name || ''), size:String(p.size || ''), category:String(p.category || ''), cat_slug:CAT_SLUG[p.category] || '',
+    unit:u, retail_price:Math.round((+p.retail_price || 0) * 100) / 100, description:String(p.catalog_description || '').slice(0, 600), highlights:hl,
+    featured:!!p.catalog_featured, status:catalogStatus(p), last_received:lastReceived(p.id) || '', image_v:img, sort:i};
+  if (u === 'ตัว' && isPiece(p) && stockOn(p)) { const st = stockOf(p.id); if (st.pc > 0 && st.g > 0) o.avg_piece_g = Math.round(st.g / st.pc / 10) * 10; }   // น้ำหนักเฉลี่ยต่อตัว (ข้อมูลประกอบ ไม่ใช่จำนวนสต็อก)
+  return o;
 }
-function catalogMeta() {
+function stockUpdatedAt(ids) { let t = ''; DB.stock_movements.forEach(m => { if (ids.has(m.product_id) && m.at > t) t = m.at; }); return t; }
+function catalogMeta(shown) {
   const s = DB.settings, c = s.catalog || {};
   return {name:s.store.name || '', name_en:s.store.name_en || '', logo:s.store.logo || '', phone:s.store.phone || '',
     line_id:(c.line_id || s.store.line || '').trim(), packing_text:c.packing_text || '', shipping_text:c.shipping_text || '',
-    shipping_fee:+s.shipping.fee || 0, hero_url:c.hero_url || '', tagline:c.tagline || ''};
+    carrier:s.shipping.carrier || '', shipping_fee:+s.shipping.fee || 0, hero_image:c.hero_image || c.hero_url || '', tagline:c.tagline || '',
+    stock_updated_at:stockUpdatedAt(new Set(shown.map(p => p.id)))};
 }
 function buildCatalog() {
-  const out = {'public/catalog/meta':catalogMeta()};
-  DB.products.filter(p => p.active && p.show_on_catalog).forEach((p, i) => out['public/catalog/products/' + slugOf(p)] = catalogProduct(p, i));
+  const shown = DB.products.filter(p => p.active && p.show_on_catalog);
+  const out = {'public/catalog/meta':catalogMeta(shown)};
+  shown.forEach((p, i) => out['public/catalog/products/' + slugOf(p)] = catalogProduct(p, i));
   return out;
 }
 /* ----- G2 self-healing: เทียบ catalog ที่คำนวณได้กับบน server แล้วเขียนเฉพาะที่ต่าง ----- */
@@ -2190,7 +2197,7 @@ function pickProductImage(inp) {
   r.readAsDataURL(f);
 }
 function catalogSection(p, id) {
-  const piece = isPiece(p), t = catThresholds(p), ov = p.catalog_status || 'auto';
+  const piece = saleUnit(p) === 'ตัว', t = catThresholds(p), ov = p.catalog_status || 'auto';
   setTimeout(async () => { if (id && /^rtdb:/.test(p.image_url || '')) { try { const t = await Backend.get('public/catalog_images/' + slugOf(p) + '/thumb'); if (t && $('#pimg') && !PIMG) $('#pimg').innerHTML = `<img src="${t.data}" alt="">`; } catch (e) {} } }, 0);
   return `<h4 style="margin:18px 0 8px;font-size:14px">🛍 Digital Menu</h4>
     <label class="row small"><input type="checkbox" class="ck" data-k="show_on_catalog" ${p.show_on_catalog ? 'checked' : ''}> แสดงสินค้านี้ในเมนูลูกค้า</label>
@@ -2205,6 +2212,7 @@ function catalogSection(p, id) {
     <label class="f" style="margin-top:10px">รายละเอียดสั้นสำหรับลูกค้า<textarea class="in" data-k="catalog_description" style="min-height:70px" maxlength="600">${esc(p.catalog_description || '')}</textarea></label>
     <label class="f" style="margin-top:10px">จุดเด่น (บรรทัดละข้อ)<textarea class="in" data-k="catalog_highlights" style="min-height:70px" placeholder="สดจากเรือ&#10;แช่แข็งทันทีหลังขึ้นท่า">${esc(p.catalog_highlights || '')}</textarea></label>
     <label class="row small" style="margin-top:10px"><input type="checkbox" class="ck" data-k="catalog_featured" ${p.catalog_featured ? 'checked' : ''}> ⭐ สินค้าแนะนำ (หน้าแรกของเมนู)</label>
+    ${unitMismatch(p) && stockOn(p) ? `<div class="note" style="margin-top:10px;border-color:var(--red)"><b style="color:var(--red)">หน่วยขายเป็น "ตัว" แต่สต็อกนับเป็นน้ำหนัก</b> · เมนูจะแสดง "สอบถามทาง LINE" จนกว่าจะแก้ — ตั้ง "วิธีนับสต็อก" เป็น นับตัว + น้ำหนัก (ทำได้เมื่อยังไม่มี Lot) หรือเลือกสถานะเองด้านบน</div>` : ''}
     ${id ? `<div class="note" style="margin-top:10px">สถานะในเมนูตอนนี้: <b>${CAT_STATUS[catalogStatus(p)]}</b>${stockOn(p) ? ` · ขายได้ทาง LINE ${fmtQ(p, stockOf(p.id).sell.LINE)} (ลูกค้าไม่เห็นตัวเลขนี้)` : ''}</div>` : ''}`;
 }
 const menuUrl = () => location.origin + location.pathname.replace(/[^/]*$/, '') + 'menu/';
@@ -2214,7 +2222,7 @@ function menuCard() {
     <div class="row" style="margin-bottom:12px"><a class="btn sm pri" href="${menuUrl()}" target="_blank" rel="noopener">เปิดเมนูลูกค้า ↗</a><button class="btn sm" onclick="copyText(menuUrl())">🔗 คัดลอกลิงก์</button><span class="small muted">แสดงอยู่ ${n} สินค้า · เลือกสินค้าที่แสดงได้ในหน้า Products</span></div>
     <div class="fgrid"><label class="f">LINE OA ID (ปุ่มสั่งซื้อ)<input class="in" data-p="catalog.line_id" value="${esc(c.line_id || DB.settings.store.line || '')}" placeholder="@taikongseafood"></label>
       <label class="f">คำโปรยหน้าแรก<input class="in" data-p="catalog.tagline" value="${esc(c.tagline || '')}" placeholder="ของทะเลสด คัดเกรด แช่แข็งพร้อมส่ง"></label>
-      <label class="f">รูป Hero (ไฟล์ใน GitHub เช่น hero.jpg)<input class="in" data-p="catalog.hero_url" value="${esc(c.hero_url || '')}" placeholder="hero.jpg"></label></div>
+      <label class="f">รูป Hero (ไฟล์ใน GitHub เช่น hero.jpg)<input class="in" data-p="catalog.hero_image" value="${esc(c.hero_image || c.hero_url || '')}" placeholder="hero.jpg"></label></div>
     <label class="f" style="margin-top:10px">วิธีแพ็ก<textarea class="in" data-p="catalog.packing_text" style="min-height:60px" placeholder="แพ็กสุญญากาศ + กล่องโฟม + เจลเย็น">${esc(c.packing_text || '')}</textarea></label>
     <label class="f" style="margin-top:10px">ค่าจัดส่ง / เงื่อนไข<textarea class="in" data-p="catalog.shipping_text" style="min-height:60px" placeholder="ส่งทั่วไทยด้วยรถห้องเย็น">${esc(c.shipping_text || '')}</textarea></label></div>`;
 }

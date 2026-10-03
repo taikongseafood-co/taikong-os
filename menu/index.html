@@ -25,12 +25,12 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);font
 a{color:inherit;text-decoration:none}
 button{font:inherit;color:inherit}
 .num{font-variant-numeric:tabular-nums}
-.wrap{max-width:720px;margin:0 auto;padding:0 16px calc(110px + env(safe-area-inset-bottom,0px))}
+.wrap{max-width:1280px;margin:0 auto;padding:0 16px calc(110px + env(safe-area-inset-bottom,0px))}
 :focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 /* top bar */
 .bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:saturate(1.4) blur(10px);-webkit-backdrop-filter:saturate(1.4) blur(10px);border-bottom:1px solid var(--line)}
-.bar .in{max-width:720px;margin:0 auto;display:flex;align-items:center;gap:10px;padding:10px 16px}
+.bar .in{max-width:1280px;flex-wrap:wrap;margin:0 auto;display:flex;align-items:center;gap:10px;padding:10px 16px}
 .logo{width:36px;height:36px;border-radius:10px;background:var(--blue);display:grid;place-items:center;font-size:19px;overflow:hidden;flex:none}
 .logo img{width:100%;height:100%;object-fit:cover}
 .brand b{display:block;font-size:14.5px;letter-spacing:.04em;line-height:1.2}
@@ -58,11 +58,13 @@ h2.sec{font-size:18px;margin:22px 0 10px;display:flex;align-items:center;gap:8px
 h2.sec .more{margin-left:auto;font-size:13.5px;color:var(--blue);font-weight:500}
 .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-3);margin:6px 0 0}
 .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-@media (min-width:600px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (min-width:640px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (min-width:1024px){.grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}}
 .hscroll{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(150px,42%);gap:12px;overflow-x:auto;margin:0 -16px;padding:0 16px 4px;scroll-snap-type:x mandatory;scrollbar-width:none}
 .hscroll::-webkit-scrollbar{display:none}
 .hscroll .card{scroll-snap-align:start}
-@media (min-width:600px){.hscroll{grid-auto-columns:minmax(170px,30%)}}
+@media (min-width:640px){.hscroll{grid-auto-columns:minmax(170px,31%)}}
+@media (min-width:1024px){.hscroll{grid-auto-flow:row;grid-template-columns:repeat(4,minmax(0,1fr));overflow:visible;margin:0;padding:0;gap:16px}}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden;display:flex;flex-direction:column;cursor:pointer;transition:transform .15s}
 .card:active{transform:scale(.98)}
 .card.out{opacity:.62}
@@ -97,7 +99,26 @@ h2.sec .more{margin-left:auto;font-size:13.5px;color:var(--blue);font-weight:500
 .hl li{display:flex;gap:8px}.hl li::before{content:"✓";color:var(--green);font-weight:700}
 .pre{white-space:pre-line;color:var(--ink-2)}
 .sticky{position:fixed;left:0;right:0;bottom:0;z-index:30;background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-top:1px solid var(--line);padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px))}
-.sticky .in{max-width:720px;margin:0 auto}
+.sticky .in{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:8px}
+.wsbtn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:46px;border-radius:14px;border:1.5px solid var(--navy);color:var(--navy);background:var(--surface);font-weight:600;width:100%}
+@media (prefers-color-scheme:dark){.wsbtn{border-color:var(--ink-2);color:var(--ink)}}
+.search{order:3;width:100%;position:relative}
+.search input{width:100%;min-height:42px;border-radius:12px;border:1px solid var(--line);background:var(--surface);padding:8px 12px 8px 38px;font:inherit;font-size:16px;color:var(--ink)}
+.search input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-soft)}
+.search::before{content:"🔍";position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:14px;opacity:.6}
+@media (min-width:900px){.search{order:0;flex:0 1 380px;margin-left:auto}.bar .grow{display:none}}
+.more-i{font-size:12px;color:var(--blue);margin-top:4px;font-weight:500}
+.upd{font-size:12.5px;color:var(--ink-3);margin:-4px 0 10px}
+.price{font-size:24px;font-weight:700;color:var(--blue)} .price small{font-size:14px;color:var(--ink-3);font-weight:400}
+.avgw{color:var(--ink-2);font-size:14px;margin-top:2px}
+.ctas{display:none}
+@media (min-width:900px){
+  .d{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:32px;align-items:start;padding-top:20px}
+  .d .dimg{margin:0;border-radius:20px;position:sticky;top:90px}
+  .d h1{margin-top:0}
+  .sticky{display:none}.ctas{display:flex;flex-direction:column;gap:10px;margin-top:16px}
+  .wrap.d{padding-bottom:60px}
+}
 .note{font-size:12.5px;color:var(--ink-3);text-align:center;margin-top:6px}
 .foot{text-align:center;color:var(--ink-3);font-size:13px;margin:30px 0 0}
 .empty{text-align:center;color:var(--ink-3);padding:40px 10px}
@@ -109,11 +130,13 @@ h2.sec .more{margin-left:auto;font-size:13.5px;color:var(--blue);font-weight:500
 <div id="app"><div class="wrap"><div class="sk" style="height:200px;margin-top:16px"></div><div class="grid" style="margin-top:16px"><div class="sk" style="height:220px"></div><div class="sk" style="height:220px"></div></div></div></div>
 <script>
 /* Taikong Seafood · Digital Menu (สาธารณะ ไม่ต้องล็อกอิน)
-   อ่านเฉพาะ public/catalog และ public/catalog_images/{slug} ผ่าน Firebase REST — ไม่มีสิทธิ์อ่าน private ใด ๆ */
+   อ่านเฉพาะ public/catalog และ public/catalog_images/{slug} ผ่าน Firebase REST — ไม่มีสิทธิ์อ่าน private
+   ราคา: แสดงเฉพาะราคาปลีก · หน่วยขาย (unit) จาก catalog เป็น Source of Truth (kg หรือ ตัว) */
 const DB_URL = 'https://taikong-seafood-back-office-default-rtdb.asia-southeast1.firebasedatabase.app';
-const CAT_EMOJI = {'กุ้ง':'🦐', 'หมึก':'🦑', 'ปลา':'🐟', 'อื่น ๆ':'🦀'};
+const CAT_EMOJI = {'กุ้ง':'🦐', 'หมึก':'🦑', 'ปลา':'🐟', 'ปู':'🦀', 'อื่น ๆ':'🦪'};
 const ST = {available:'🟢 มีสินค้า', low:'🟡 เหลือจำนวนจำกัด', soldout:'🔴 หมดชั่วคราว', preorder:'🔵 สั่งจองล่วงหน้า', ask:'💬 สอบถามทาง LINE'};
 const ST_ORDER = {available:0, low:1, preorder:2, ask:3, soldout:4};
+const TH_M = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[c]));
 const baht = n => { const v = Math.round((+n || 0) * 100) / 100; return '฿' + v.toLocaleString('th-TH', {minimumFractionDigits:Number.isInteger(v) ? 0 : 2, maximumFractionDigits:2}); };
@@ -121,24 +144,29 @@ const pad = n => String(n).padStart(2, '0');
 const ymd = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
 const LINE_SVG = '<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M12 3C6.5 3 2 6.6 2 11c0 3.9 3.5 7.2 8.3 7.9.3.1.8.2.9.5.1.3.1.7 0 1l-.1.9c0 .3-.2 1 .9.5s5.9-3.5 8-6C21.4 14.2 22 12.7 22 11c0-4.4-4.5-8-10-8z"/></svg>';
 let CAT = null, LOADED_AT = 0;
+const unit = p => p.unit === 'ตัว' ? 'ตัว' : 'kg';
+const title = p => (p.name + (p.size ? ' ' + p.size : '')).trim();
+const catKey = c => (CAT.list.find(p => p.category === c) || {}).cat_slug || c;
 
-/* ---------- LINE: เปิดแชต OA พร้อมข้อความ (encode ถูกต้อง) ---------- */
+/* ---------- LINE ---------- */
 function lineUrl(text) {
   const id = (CAT.meta.line_id || '').trim(); if (!id) return '';
   const acct = id.startsWith('@') ? id : '@' + id;
   return 'https://line.me/R/oaMessage/' + encodeURIComponent(acct).replace(/^%40/, '@') + '/?' + encodeURIComponent(text);
 }
+const MSG_ORDER = p => `สนใจ ${title(p)}\nต้องการสั่งซื้อ/สอบถามรายละเอียดค่ะ`;
+const MSG_WHOLESALE = p => `สนใจขอราคาส่ง\n${title(p)}\nรบกวนแจ้งราคาส่งให้ด้วยค่ะ`;
 const lineBtn = (text, cls = '') => { const u = lineUrl(text); return u ? `<a class="linebtn ${cls}" href="${esc(u)}" target="_blank" rel="noopener">${LINE_SVG} สั่งซื้อ / สอบถามผ่าน LINE</a>` : ''; };
+const wsBtn = p => { const u = lineUrl(MSG_WHOLESALE(p)); return u ? `<a class="wsbtn" href="${esc(u)}" target="_blank" rel="noopener">🏷️ ขอราคาส่ง</a>` : ''; };
 
 /* ---------- Data ---------- */
 async function load() {
   const r = await fetch(DB_URL + '/public/catalog.json', {cache:'no-store'}); if (!r.ok) throw new Error('HTTP ' + r.status);
   const c = await r.json() || {}; c.meta = c.meta || {};
-  c.list = Object.values(c.products || {}).filter(p => p && p.slug && p.name).map(p => ({...p, prices:p.prices || {}, highlights:Object.values(p.highlights || {})}));
+  c.list = Object.values(c.products || {}).filter(p => p && p.slug && p.name).map(p => ({...p, highlights:Object.values(p.highlights || {})}));
   c.list.sort((a, b) => (ST_ORDER[a.status] ?? 9) - (ST_ORDER[b.status] ?? 9) || (a.sort ?? 0) - (b.sort ?? 0));
   CAT = c; LOADED_AT = Date.now();
 }
-/* รูป: ดึงทีละใบเมื่อเลื่อนมาเห็น (lazy) + cache ในเครื่องตามเวอร์ชันรูป */
 const IMGMEM = {};
 async function getImg(slug, size, v) {
   const key = `tkimg:${slug}:${size}`, mem = IMGMEM[key]; if (mem && mem.v === v) return mem.data;
@@ -152,86 +180,115 @@ async function getImg(slug, size, v) {
 let IO = null;
 function lazyImages() {
   if (IO) IO.disconnect();
-  const show = async el => { const d = await getImg(el.dataset.slug, el.dataset.size, +el.dataset.v); if (d) { el.src = d; el.onload = () => el.classList.add('ok'); } };
+  const show = async el => { const d = await getImg(el.dataset.slug, el.dataset.size, +el.dataset.v); if (d) { el.onload = () => el.classList.add('ok'); el.src = d; } };
   const els = document.querySelectorAll('img[data-slug]:not([src])');
   if (!('IntersectionObserver' in window)) return els.forEach(show);
-  IO = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { IO.unobserve(e.target); show(e.target); } }), {rootMargin:'200px'});
+  IO = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { IO.unobserve(e.target); show(e.target); } }), {rootMargin:'300px'});
   els.forEach(el => IO.observe(el));
 }
 
-/* ---------- Views ---------- */
-const isNew = p => { if (!p.last_received) return false; const d = new Date(); const t = ymd(d); d.setDate(d.getDate() - 2); return p.last_received >= ymd(d) && p.last_received <= t; };
-const isToday = p => p.last_received === ymd(new Date());
-const unit = p => p.unit === 'ตัว' ? 'ตัว' : 'kg';
-function card(p) {
-  return `<a class="card ${p.status === 'soldout' ? 'out' : ''}" href="?p=${encodeURIComponent(p.slug)}" data-nav>
-    <div class="ph">${CAT_EMOJI[p.category] || '🐟'}${p.image_v ? `<img alt="${esc(p.name)}" data-slug="${esc(p.slug)}" data-size="thumb" data-v="${p.image_v}">` : ''}<span class="st ${esc(p.status)}">${ST[p.status] || ''}</span>${isNew(p) ? '<span class="new">เข้าใหม่</span>' : ''}</div>
-    <div class="b"><div class="nm">${esc(p.name)}</div>${p.size ? `<div class="sz">${esc(p.size)}</div>` : ''}<div class="pr num">${p.prices.p1 ? baht(p.prices.p1) + `<small>/${unit(p)}</small>` : '<small>สอบถามราคา</small>'}</div></div></a>`;
+/* ---------- Helpers ---------- */
+const daysAgo = n => { const d = new Date(); d.setDate(d.getDate() - n); return ymd(d); };
+const isNew = p => !!p.last_received && p.last_received >= daysAgo(1);          // เข้าวันนี้หรือเมื่อวาน (จากวันที่รับ Lot จริง)
+function updatedText() {
+  const t = CAT.meta.stock_updated_at; if (!t) return '';
+  const d = new Date(t); if (isNaN(d)) return '';
+  const hm = pad(d.getHours()) + ':' + pad(d.getMinutes()) + ' น.';
+  return 'อัปเดตล่าสุด ' + (ymd(d) === ymd(new Date()) ? hm : `${d.getDate()} ${TH_M[d.getMonth()]} ${hm}`);
 }
-function topbar(back) {
+const priceHtml = p => p.retail_price > 0 ? `${baht(p.retail_price)}<small> / ${unit(p)}</small>` : '<small>สอบถามราคา</small>';
+const avgHtml = p => unit(p) === 'ตัว' && p.avg_piece_g > 0 ? `น้ำหนักประมาณ ${p.avg_piece_g >= 1000 ? (p.avg_piece_g / 1000).toLocaleString('th-TH', {maximumFractionDigits:2}) + ' kg' : p.avg_piece_g + ' g'}/ตัว` : '';
+function card(p) {
+  return `<a class="card ${p.status === 'soldout' ? 'out' : ''}" href="?p=${encodeURIComponent(p.slug)}" data-nav aria-label="${esc(title(p))} ดูรายละเอียด">
+    <div class="ph">${CAT_EMOJI[p.category] || '🐟'}${p.image_v ? `<img alt="${esc(p.name)}" data-slug="${esc(p.slug)}" data-size="thumb" data-v="${p.image_v}">` : ''}<span class="st ${esc(p.status)}">${ST[p.status] || ''}</span>${isNew(p) ? '<span class="new">เข้าใหม่</span>' : ''}</div>
+    <div class="b"><div class="nm">${esc(p.name)}</div>${p.size ? `<div class="sz">${esc(p.size)}</div>` : ''}${avgHtml(p) ? `<div class="sz">${avgHtml(p)}</div>` : ''}
+      <div class="pr num">${priceHtml(p)}</div><div class="more-i">ดูรายละเอียด ›</div></div></a>`;
+}
+function topbar(back, q = '') {
   const m = CAT.meta;
-  return `<header class="bar"><div class="in">${back ? `<button class="back" onclick="goBack()" aria-label="ย้อนกลับ">‹ กลับ</button>` : `<div class="logo">${m.logo && m.logo.startsWith('data:image/') ? `<img src="${m.logo}" alt="">` : '🦐'}</div><div class="brand"><b>${esc(m.name_en || 'TAIKONG SEAFOOD')}</b><small>${esc(m.name || 'ไต้ก๋ง ซีฟู้ด')}</small></div>`}<div class="grow"></div>${lineUrl('') ? `<a class="linebtn" href="${esc(lineUrl('สวัสดีค่ะ สนใจสั่งของทะเล'))}" target="_blank" rel="noopener" aria-label="LINE">${LINE_SVG} LINE</a>` : ''}</div></header>`;
+  return `<header class="bar"><div class="in">${back ? `<button class="back" onclick="goBack()" aria-label="ย้อนกลับ">‹ กลับ</button>` : `<a href="./" data-nav style="display:flex;gap:10px;align-items:center"><div class="logo">${m.logo && m.logo.startsWith('data:image/') ? `<img src="${m.logo}" alt="">` : '🦐'}</div><div class="brand"><b>${esc(m.name_en || 'TAIKONG SEAFOOD')}</b><small>${esc(m.name || 'ไต้ก๋ง ซีฟู้ด')}</small></div></a>`}
+    <div class="grow"></div><label class="search"><span class="sr" style="position:absolute;left:-9999px">ค้นหาสินค้า</span><input id="q" type="search" enterkeyhint="search" placeholder="ค้นหา เช่น หมึก, กุ้ง, 4–6 ตัว" value="${esc(q)}" oninput="onSearch(this.value)" autocomplete="off"></label>
+    ${lineUrl('') ? `<a class="linebtn" href="${esc(lineUrl('สวัสดีค่ะ สนใจสั่งของทะเล'))}" target="_blank" rel="noopener" aria-label="LINE">${LINE_SVG} LINE</a>` : ''}</div></header>`;
 }
 function chips(active) {
   const cats = [...new Set(CAT.list.map(p => p.category).filter(Boolean))];
-  return `<nav class="chips" aria-label="หมวดสินค้า"><a class="chip ${active === 'all' ? 'on' : ''}" href="?c=all" data-nav>ทั้งหมด</a>${cats.map(c => `<a class="chip ${active === c ? 'on' : ''}" href="?c=${encodeURIComponent(c)}" data-nav>${CAT_EMOJI[c] || ''} ${esc(c)}</a>`).join('')}</nav>`;
+  return `<nav class="chips" aria-label="หมวดสินค้า"><a class="chip ${active === 'all' ? 'on' : ''}" href="?c=all" data-nav>ทั้งหมด</a>${cats.map(c => `<a class="chip ${active === c ? 'on' : ''}" href="?c=${encodeURIComponent(catKey(c))}" data-nav>${CAT_EMOJI[c] || ''} ${esc(c)}</a>`).join('')}</nav>`;
 }
 const legend = () => `<div class="legend"><span>${ST.available}</span><span>${ST.low}</span><span>${ST.soldout}</span></div>`;
+const grid = L => L.length ? `<div class="grid" style="margin-top:12px">${L.map(card).join('')}</div>` : '<div class="empty">ไม่พบสินค้า</div>';
+
+/* ---------- Views ---------- */
 function vHome() {
   const m = CAT.meta, L = CAT.list;
-  const today = L.filter(isToday), fresh = today.length ? today : L.filter(isNew), feat = L.filter(p => p.featured);
-  const hero = m.hero_url && /^[\w./-]+$/.test(m.hero_url) ? `<img class="bgimg" src="../${esc(m.hero_url.replace(/^\.?\//, ''))}" alt="" onerror="this.remove()">` : '';
+  const fresh = L.filter(p => p.last_received && ['available', 'low'].includes(p.status)).sort((a, b) => b.last_received.localeCompare(a.last_received)).slice(0, 8);
+  const feat = L.filter(p => p.featured).slice(0, 8);
+  const hero = m.hero_image && /^[\w./-]+$/.test(m.hero_image) ? `<img class="bgimg" src="../${esc(m.hero_image.replace(/^\.?\//, ''))}" alt="" onerror="this.remove()">` : '';
   return `${topbar(false)}<main class="wrap">
     <section class="hero">${hero}<svg class="waves" viewBox="0 0 400 80" preserveAspectRatio="none" width="100%" height="80" aria-hidden="true"><path d="M0 40 Q50 10 100 40 T200 40 T300 40 T400 40 V80 H0Z" fill="#1668E3"/><path d="M0 55 Q50 30 100 55 T200 55 T300 55 T400 55 V80 H0Z" fill="#4C8FF5" opacity=".6"/></svg>
-      <div class="txt"><h1>${esc(m.tagline || 'ของทะเลสด คัดเกรด แช่แข็งพร้อมส่ง')}</h1><p>เลือกดูสินค้าและราคา แล้วทักสั่งซื้อทาง LINE ได้เลย</p>${lineBtn('สวัสดีค่ะ สนใจสั่งของทะเล')}</div></section>
+      <div class="txt"><h1>${esc(m.tagline || 'ของทะเลสด คัดเกรด แช่แข็งพร้อมส่ง')}</h1><p>เลือกดูสินค้าและราคา แล้วทักสั่งซื้อทาง LINE ได้เลย</p>${lineUrl('') ? `<a class="linebtn" href="${esc(lineUrl('สวัสดีค่ะ สนใจสั่งของทะเล'))}" target="_blank" rel="noopener">💬 สั่งซื้อ / สอบถามผ่าน LINE</a>` : ''}</div></section>
     ${chips('')}
-    ${fresh.length ? `<h2 class="sec">🌊 ${today.length ? 'ของทะเลวันนี้' : 'เข้าใหม่ล่าสุด'}<a class="more" href="?c=all" data-nav>ดูทั้งหมด ›</a></h2><div class="hscroll">${fresh.map(card).join('')}</div>` : ''}
+    ${fresh.length ? `<h2 class="sec">🌊 ของทะเลวันนี้<a class="more" href="?c=all" data-nav>ดูทั้งหมด ›</a></h2><div class="upd">สินค้าที่พร้อมส่งจากสต็อกล่าสุด${updatedText() ? ' · ' + updatedText() : ''}</div><div class="hscroll">${fresh.map(card).join('')}</div>` : ''}
     ${feat.length ? `<h2 class="sec">⭐ สินค้าแนะนำ</h2><div class="hscroll">${feat.map(card).join('')}</div>` : ''}
     <h2 class="sec">สินค้าทั้งหมด <span style="font-weight:400;color:var(--ink-3);font-size:14px">${L.length} รายการ</span></h2>${legend()}
-    ${L.length ? `<div class="grid" style="margin-top:12px">${L.map(card).join('')}</div>` : '<div class="empty">ยังไม่มีสินค้าในเมนู</div>'}
-    <p class="foot">${esc(m.name || 'ไต้ก๋ง ซีฟู้ด')}${m.phone ? ' · ' + esc(m.phone) : ''}${m.line_id ? ' · LINE ' + esc(m.line_id) : ''}<br>ราคาและสถานะอัปเดตจากร้านโดยตรง</p></main>`;
+    ${L.length ? grid(L) : '<div class="empty">ยังไม่มีสินค้าในเมนู</div>'}
+    <p class="foot">${esc(m.name || 'ไต้ก๋ง ซีฟู้ด')}${m.phone ? ' · ' + esc(m.phone) : ''}${m.line_id ? ' · LINE ' + esc(m.line_id) : ''}<br>ราคาปลีก · สนใจราคาส่งทักสอบถามทาง LINE</p></main>`;
 }
+function catFromParam(c) { if (c === 'all') return 'all'; const cats = [...new Set(CAT.list.map(p => p.category))]; return cats.find(x => x === c || catKey(x) === c) || c; }
 function vList(c) {
-  const L = c === 'all' ? CAT.list : CAT.list.filter(p => p.category === c);
-  return `${topbar(true)}<main class="wrap"><h2 class="sec" style="margin-top:16px">${c === 'all' ? 'สินค้าทั้งหมด' : (CAT_EMOJI[c] || '') + ' ' + esc(c)}</h2>${chips(c)}${legend()}
-    ${L.length ? `<div class="grid" style="margin-top:12px">${L.map(card).join('')}</div>` : '<div class="empty">ยังไม่มีสินค้าในหมวดนี้</div>'}</main>`;
+  const cat = catFromParam(c), L = cat === 'all' ? CAT.list : CAT.list.filter(p => p.category === cat);
+  return `${topbar(true)}<main class="wrap"><h2 class="sec" style="margin-top:16px">${cat === 'all' ? 'สินค้าทั้งหมด' : (CAT_EMOJI[cat] || '') + ' ' + esc(cat)}</h2>${chips(cat)}${legend()}${grid(L)}</main>`;
+}
+const norm = s => String(s || '').toLowerCase().replace(/[\s\-–—]+/g, '');
+function vSearch(q) {
+  const n = norm(q), L = CAT.list.filter(p => [p.name, p.size, p.category].some(x => norm(x).includes(n)));
+  return `${topbar(true, q)}<main class="wrap"><h2 class="sec" style="margin-top:16px">ผลการค้นหา “${esc(q)}” <span style="font-weight:400;color:var(--ink-3);font-size:14px">${L.length} รายการ</span></h2>${chips('')}${grid(L)}</main>`;
 }
 function vDetail(slug) {
   const p = CAT.list.find(x => x.slug === slug);
   if (!p) return `${topbar(true)}<main class="wrap"><div class="empty">ไม่พบสินค้านี้ หรือสินค้าถูกนำออกจากเมนูแล้ว<br><br><a class="chip on" href="?c=all" data-nav>ดูสินค้าทั้งหมด</a></div></main>`;
-  const m = CAT.meta, u = unit(p), pr = p.prices;
-  const tiers = u === 'kg' ? [['1 kg', pr.p1], ['5 kg ขึ้นไป', pr.p5], ['10 kg ขึ้นไป', pr.p10], ['20 kg ขึ้นไป', pr.p20]].filter(x => +x[1] > 0) : [['ราคา / ตัว', pr.p1]].filter(x => +x[1] > 0);
-  const best = tiers.length > 1 ? Math.min(...tiers.map(t => +t[1])) : null;
-  const msg = `สนใจ ${p.name}${p.size ? ' ' + p.size : ''}`;
-  document.title = `${p.name}${p.size ? ' ' + p.size : ''} · ${m.name || 'ไต้ก๋ง ซีฟู้ด'}`;
-  setTimeout(async () => { if (!p.image_v) return; const el = $('#dimg'); const th = await getImg(p.slug, 'thumb', p.image_v); if (th && el && !el.dataset.full) { el.innerHTML += `<img class="lq" src="${th}" alt="">`; }
+  const m = CAT.meta, u = unit(p);
+  const ship = [m.carrier && m.shipping_fee ? `${m.carrier} ${baht(m.shipping_fee)}` : m.shipping_fee ? `ค่าส่งเริ่มต้น ${baht(m.shipping_fee)}` : '', m.shipping_text].filter(Boolean).join('\n');
+  document.title = `${title(p)} · ${m.name || 'ไต้ก๋ง ซีฟู้ด'}`;
+  setTimeout(async () => { if (!p.image_v) return; const el = $('#dimg'); const th = await getImg(p.slug, 'thumb', p.image_v); if (th && el && !el.dataset.full) el.insertAdjacentHTML('beforeend', `<img class="lq" src="${th}" alt="">`);
     const lg = await getImg(p.slug, 'large', p.image_v); if (lg && el) { el.dataset.full = 1; el.innerHTML = `<img src="${lg}" alt="${esc(p.name)}">`; } }, 0);
+  const ctas = `${lineBtn(MSG_ORDER(p), 'lg')}${wsBtn(p)}`;
   return `${topbar(true)}<main class="wrap d">
     <div class="dimg" id="dimg">${CAT_EMOJI[p.category] || '🐟'}</div>
-    <h1>${esc(p.name)}</h1>${p.size ? `<div class="sz">${esc(p.size)}</div>` : ''}
-    <span class="pill ${esc(p.status)}">${ST[p.status] || ''}</span>
-    ${tiers.length ? `<div class="box"><h3>ราคา</h3><table class="ptab num">${tiers.map(t => `<tr class="${+t[1] === best ? 'best' : ''}"><td>${t[0]}</td><td>${baht(t[1])}<span style="font-weight:400;color:var(--ink-3)">/${u}</span></td></tr>`).join('')}</table></div>` : ''}
-    ${p.description ? `<div class="box"><h3>รายละเอียด</h3><div class="pre">${esc(p.description)}</div></div>` : ''}
-    ${p.highlights.length ? `<div class="box"><h3>จุดเด่น</h3><ul class="hl">${p.highlights.map(h => `<li>${esc(h)}</li>`).join('')}</ul></div>` : ''}
-    ${m.packing_text ? `<div class="box"><h3>📦 วิธีแพ็ก</h3><div class="pre">${esc(m.packing_text)}</div></div>` : ''}
-    ${m.shipping_text || m.shipping_fee ? `<div class="box"><h3>🚚 ค่าจัดส่ง</h3><div class="pre">${m.shipping_fee ? `ค่าส่งเริ่มต้น ${baht(m.shipping_fee)}` : ''}${m.shipping_fee && m.shipping_text ? '\n' : ''}${esc(m.shipping_text || '')}</div></div>` : ''}
+    <div>
+      <h1>${esc(p.name)}</h1>${p.size ? `<div class="sz">${esc(p.size)}</div>` : ''}
+      <span class="pill ${esc(p.status)}">${ST[p.status] || ''}</span>
+      <div class="box"><h3>ราคาปลีก</h3><div class="price num">${priceHtml(p)}</div>${avgHtml(p) ? `<div class="avgw">${avgHtml(p)}</div>` : ''}<div class="note" style="text-align:left;margin-top:8px">ซื้อจำนวนมาก? กด “🏷️ ขอราคาส่ง” เพื่อสอบถามทาง LINE</div></div>
+      ${p.description ? `<div class="box"><h3>รายละเอียด</h3><div class="pre">${esc(p.description)}</div></div>` : ''}
+      ${p.highlights.length ? `<div class="box"><h3>จุดเด่น</h3><ul class="hl">${p.highlights.map(h => `<li>${esc(h)}</li>`).join('')}</ul></div>` : ''}
+      ${m.packing_text ? `<div class="box"><h3>📦 การแพ็ก</h3><div class="pre">${esc(m.packing_text)}</div></div>` : ''}
+      ${ship ? `<div class="box"><h3>🚚 ค่าจัดส่ง</h3><div class="pre">${esc(ship)}</div></div>` : ''}
+      ${lineUrl('') ? `<div class="ctas">${ctas}${p.status === 'soldout' ? '<div class="note">สินค้าหมดชั่วคราว · ทักถามรอบเข้าของถัดไปได้</div>' : ''}</div>` : ''}
+    </div>
   </main>
-  ${lineUrl('') ? `<div class="sticky"><div class="in">${lineBtn(msg, 'lg')}<div class="note">${p.status === 'soldout' ? 'สินค้าหมดชั่วคราว · ทักถามรอบเข้าของถัดไปได้' : 'ระบบจะเปิด LINE พร้อมข้อความ "' + esc(msg) + '"'}</div></div></div>` : ''}`;
+  ${lineUrl('') ? `<div class="sticky"><div class="in">${ctas}</div></div>` : ''}`;
 }
 
 /* ---------- Router ---------- */
 function render() {
   const q = new URLSearchParams(location.search), app = $('#app');
   if (!q.get('p')) document.title = (CAT.meta.name || 'ไต้ก๋ง ซีฟู้ด') + ' · เมนูของทะเล';
-  app.innerHTML = q.get('p') ? vDetail(q.get('p')) : q.get('c') ? vList(q.get('c')) : vHome();
+  app.innerHTML = q.get('p') ? vDetail(q.get('p')) : q.get('q') ? vSearch(q.get('q')) : q.get('c') ? vList(q.get('c')) : vHome();
   lazyImages();
 }
+let ST_T = null;
+function onSearch(v) {
+  clearTimeout(ST_T); ST_T = setTimeout(() => {
+    const val = v.trim(), url = val ? '?q=' + encodeURIComponent(val) : './';
+    const wasSearch = new URLSearchParams(location.search).has('q');
+    history[wasSearch ? 'replaceState' : 'pushState']({}, '', url); render();
+    const i = $('#q'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
+  }, 250);
+}
 function nav(href) { history.pushState({}, '', href); render(); scrollTo(0, 0); }
-function goBack() { if (history.state && history.length > 1) history.back(); else nav(location.pathname); }
+function goBack() { if (history.state && history.length > 1) history.back(); else nav('./'); }
 document.addEventListener('click', e => { const a = e.target.closest('a[data-nav]'); if (!a || e.metaKey || e.ctrlKey) return; e.preventDefault(); nav(a.getAttribute('href')); });
 addEventListener('popstate', render);
-/* โหลดใหม่เมื่อกลับมาที่แท็บ (สถานะสินค้าเป็นปัจจุบันเสมอ) */
-document.addEventListener('visibilitychange', async () => { if (!document.hidden && CAT && Date.now() - LOADED_AT > 60000) { try { await load(); const y = scrollY; render(); scrollTo(0, y); } catch (e) {} } });
+document.addEventListener('visibilitychange', async () => { if (!document.hidden && CAT && Date.now() - LOADED_AT > 60000) { try { await load(); const y = scrollY; const f = document.activeElement && document.activeElement.id === 'q'; render(); scrollTo(0, y); if (f) $('#q').focus(); } catch (e) {} } });
 (async function start() {
   try { await load(); render(); }
   catch (e) { $('#app').innerHTML = `<div class="wrap"><div class="empty">โหลดเมนูไม่สำเร็จ<br><span style="font-size:13px">ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่</span><br><br><button class="chip on" onclick="location.reload()">ลองใหม่</button></div></div>`; }
