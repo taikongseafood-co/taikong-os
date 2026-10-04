@@ -2113,7 +2113,7 @@ function receiveModal(pid) {
 }
 function rvCalc() {
   const piece = RV.type === 'PIECE_BY_WEIGHT';
-  if (piece && RV.lotmode === 'pieces') { const ws = String(RV.weights).split(/[\s,;]+/).map(Number).filter(x => x > 0); const g = Math.round(ws.reduce((a, b) => a + b, 0)); return {piece, each:true, ws, pcs:ws.length, g, avg:ws.length ? g / ws.length : 0}; }
+  if (RV.lotmode === 'pieces') { /* ชั่งรายตัว: ใช้ได้กับทุกสินค้า */ const ws = String(RV.weights).split(/[\s,;]+/).map(Number).filter(x => x > 0); const g = Math.round(ws.reduce((a, b) => a + b, 0)); return {piece, each:true, ws, pcs:ws.length, g, avg:ws.length ? g / ws.length : 0}; }
   const pcs = Math.round(+RV.pcs || 0), g = toG(RV.kg);   // สินค้าน้ำหนักอย่างเดียว: จำนวนตัวเป็นข้อมูลของ Lot เท่านั้น
   return {piece, each:false, ws:null, pcs, g, avg:pcs ? g / pcs : 0};
 }
@@ -2125,9 +2125,10 @@ function renderReceive() {
     <label class="f">Size / Grade ของ Lot นี้ (ไม่บังคับ)<input class="in" list="gradelist" value="${esc(RV.grade)}" placeholder="เช่น 3–4 ตัว/kg" oninput="RV.grade=this.value"><datalist id="gradelist">${[...new Set([...methodsOf(p).flatMap(m => sizesOf(m).map(s => s.grade)), ...gradesUsed(p.id), p.default_grade].filter(Boolean))].map(g => `<option value="${esc(g)}">`).join('')}</datalist></label>
   </div>
   ${methodsOf(p).length ? `<p class="small muted" style="margin:8px 0 0">วิธีขาย: ${methodsOf(p).map(m => sizesOf(m).length ? sizesOf(m).map(s => `<b>${esc(s.grade)}</b> ฿${n2(s.price)}`).join(', ') : `<b>${esc(m.name)}</b> ฿${n2(m.price)}/kg`).join(' · ')}${tracksPcs(p) ? ' · นับจำนวนตัวด้วย' : ''}</p>` : ''}
-  <div style="margin-top:14px">${piece ? `<div class="seg" style="margin-bottom:10px"><button class="${RV.lotmode !== 'pieces' ? 'on' : ''}" onclick="RV.lotmode='count';renderReceive()">น้ำหนักรวม</button><button class="${RV.lotmode === 'pieces' ? 'on' : ''}" onclick="RV.lotmode='pieces';renderReceive()">ชั่งรายตัว</button></div>
-    ${RV.lotmode === 'pieces' ? `<label class="f">น้ำหนักแต่ละตัว (กรัม) · คั่นด้วยเว้นวรรคหรือขึ้นบรรทัดใหม่<textarea class="in num" placeholder="555&#10;658&#10;620" oninput="RV.weights=this.value;rvSum()">${esc(RV.weights)}</textarea></label><p class="small muted" style="margin:6px 0 0">ไม่บังคับ · ชั่งรายตัวเมื่ออยากให้ลูกค้าเลือกตัวได้ (เมนูแสดงน้ำหนักและราคาของแต่ละตัว)</p>`
-      : `<div class="fgrid"><label class="f">จำนวน (ตัว)<input class="in num" type="number" inputmode="numeric" min="0" value="${RV.pcs}" oninput="RV.pcs=this.value;rvSum()"></label><label class="f">น้ำหนักรวม (kg)<input class="in num" type="number" inputmode="decimal" step="0.001" min="0" value="${RV.kg}" oninput="RV.kg=this.value;rvSum()"></label></div>`}`
+  <div style="margin-top:14px"><div class="seg" style="margin-bottom:10px"><button class="${RV.lotmode !== 'pieces' ? 'on' : ''}" onclick="RV.lotmode='count';renderReceive()">น้ำหนักรวม</button><button class="${RV.lotmode === 'pieces' ? 'on' : ''}" onclick="RV.lotmode='pieces';renderReceive()">ชั่งรายตัว</button></div>
+    ${RV.lotmode === 'pieces' ? `<label class="f">น้ำหนักแต่ละตัว (กรัม) · คั่นด้วยเว้นวรรคหรือขึ้นบรรทัดใหม่<textarea class="in num" placeholder="555&#10;658&#10;620" oninput="RV.weights=this.value;rvSum()">${esc(RV.weights)}</textarea></label>
+      <p class="small muted" style="margin:6px 0 0">ระบบจำปลาแต่ละตัวไว้${piece ? '' : ' และเริ่มนับจำนวนตัวของสินค้านี้ให้อัตโนมัติ'} · ${hasPieceMethod(p) ? 'ลูกค้าเลือกตัวได้จากเมนู (วิธี "ขายเป็นตัว")' : 'ถ้าอยากให้ลูกค้าเลือกตัวได้ เพิ่มวิธีขาย "ขายเป็นตัว" ที่หน้า Products'}</p>`
+    : piece ? `<div class="fgrid"><label class="f">จำนวน (ตัว)<input class="in num" type="number" inputmode="numeric" min="0" value="${RV.pcs}" oninput="RV.pcs=this.value;rvSum()"></label><label class="f">น้ำหนักรวม (kg)<input class="in num" type="number" inputmode="decimal" step="0.001" min="0" value="${RV.kg}" oninput="RV.kg=this.value;rvSum()"></label></div>`
     : `<div class="fgrid"><label class="f">น้ำหนัก (kg)<input class="in num" type="number" inputmode="decimal" step="0.001" min="0" value="${RV.kg}" oninput="RV.kg=this.value;rvSum()"></label><label class="f">จำนวนตัว (ไม่บังคับ)<input class="in num" type="number" inputmode="numeric" min="0" value="${RV.pcs}" oninput="RV.pcs=this.value;rvSum()"></label></div>`}
   </div>
   <div class="fgrid" style="margin-top:12px"><label class="f">ราคาที่จ่ายทั้งหมด (฿)<input class="in num" id="rvcost" type="number" inputmode="decimal" min="0" value="${RV.cost}" oninput="RV.cost=this.value;RV.perkg='';rvSum()"></label><label class="f">หรือราคาต่อ kg (฿)<input class="in num" id="rvperkg" type="number" inputmode="decimal" min="0" value="${RV.perkg}" oninput="RV.perkg=this.value;RV.cost='';rvSum()"></label></div>
@@ -2149,6 +2150,7 @@ function saveReceive() {
   if (c.each && !c.ws.length) return toast('ใส่น้ำหนักแต่ละตัว'); if (!(c.g > 0)) return toast('ใส่น้ำหนักก่อน'); if (c.piece && !(c.pcs > 0)) return toast('ใส่จำนวนตัวก่อน');
   const now = new Date().toISOString();
   p.unit = 'kg';
+  if (c.each && !tracksPcs(p)) p.stock_type = 'PIECE_BY_WEIGHT';   // ชั่งรายตัว → เริ่มนับจำนวนตัวของสินค้านี้ (ของเดิมยังนับเป็นน้ำหนัก)
   p.stock_enabled = true; p.updated_at = now;
   const lot = {id:uid('L'), lot_code:lotCode(RV.date), product_id:p.id, received_at:RV.date, supplier:RV.supplier.trim(), grade:String(RV.grade || '').trim(), received_g:c.g, received_pcs:c.pcs || null, piece_weights:c.ws, cost_total:k.total, cost_per_kg:Math.round(k.perkg * 100) / 100, notes:RV.note.trim(), created_at:now, created_by:USER?.email || ''};
   if (isPBW(p)) { lot.mode = c.each ? 'pieces' : 'count'; if (c.each) lot.pieces = c.ws.map(g => ({id:uid('F'), g:Math.round(g)})); }
