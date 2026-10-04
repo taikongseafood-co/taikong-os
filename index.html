@@ -1900,11 +1900,26 @@ async function buildBill(m, s) {
   let qrImg = null;
   if (showQR) qrImg = (s.payment.qr_mode === 'image' && s.payment.qr_image) ? await loadImg(s.payment.qr_image) : await qrCanvas(promptpay(s.payment.promptpay, o.total));
   const logo = s.store.logo ? await loadImg(s.store.logo).catch(() => null) : null;
-  const itemH = 66, H = 210 + 150 + o.items.length * itemH + 40 + (o.discount ? 200 : 160) + (showQR ? 520 : (paid ? 190 + TL.length * 30 : 120)) + 90;
+  /* วัดความกว้างข้อความจากหน้าเว็บ (Safari บน iPhone วัดฟอนต์ไทยใน canvas ได้ 0 ทำให้ชิดขวา/กึ่งกลางเพี้ยน) แล้วจัดตำแหน่งเอง */
+  const ms = document.createElement('span'); ms.style.cssText = 'position:absolute;left:-9999px;top:0;white-space:pre;visibility:hidden'; document.body.appendChild(ms);
+  const MW = (t, f) => { if (!t) return 0; ms.style.font = f; ms.textContent = t; return ms.getBoundingClientRect().width; };
+  const seg = t => { try { return [...new Intl.Segmenter('th', {granularity:'word'}).segment(t)].map(s => s.segment); } catch (e) { return [...t]; } };
+  const chunks = t => { const p = String(t).split(/( · |, )/), out = []; for (let i = 0; i < p.length; i += 2) out.push(p[i] + (p[i + 1] || '')); return out.filter(Boolean); };   // ตัดบรรทัดที่ " · " หรือ ", " ก่อน
+  const wrap = (t, max, f, n = 2) => { const sg = chunks(t).flatMap(c => MW(c, f) > max ? seg(c) : [c]), out = []; let cur = '';
+    for (let i = 0; i < sg.length; i++) { const w = sg[i];
+      if (!cur || MW(cur + w, f) <= max) { cur += w; continue; }
+      out.push(cur.trimEnd());
+      if (out.length === n - 1) { cur = sg.slice(i).join('').trimStart(); break; }   // บรรทัดสุดท้าย: ที่เหลือทั้งหมด (ตัดด้วย … ถ้ายาวเกิน)
+      cur = w.trimStart(); }
+    if (cur) out.push(cur);
+    const L = out.length - 1; if (MW(out[L], f) > max) { let s = out[L]; while (s.length && MW(s + '…', f) > max) s = s.slice(0, -1); out[L] = s.trimEnd() + '…'; }
+    return out.slice(0, n); };
+  const IF = `500 20px ${F1}`, IMAX = W - PAD * 2 - 170, names = o.items.map(i => wrap(i.name, IMAX, IF));
+  const itemH = 66, LH = 26, H = 210 + 150 + o.items.length * itemH + names.reduce((s, l) => s + (l.length - 1) * LH, 0) + 40 + (o.discount ? 200 : 160) + (showQR ? 520 : (paid ? 190 + TL.length * 30 : 120)) + 90;
   const cv = document.createElement('canvas'); cv.width = W * S; cv.height = H * S;
   const x = cv.getContext('2d'); x.scale(S, S); x.textBaseline = 'alphabetic';
-  const T = (t, X, Y, f, col, al = 'left') => { x.font = f; x.fillStyle = col; x.textAlign = al; x.fillText(t, X, Y); };
-  const fit = (t, max, f) => { x.font = f; if (x.measureText(t).width <= max) return t; while (t.length && x.measureText(t + '…').width > max) t = t.slice(0, -1); return t + '…'; };
+  const T = (t, X, Y, f, col, al = 'left') => { if (!t) return; x.font = f; x.fillStyle = col; x.textAlign = 'left'; const w = al === 'left' ? 0 : MW(t, f); x.fillText(t, al === 'right' ? X - w : al === 'center' ? X - w / 2 : X, Y); };
+  const fit = (t, max, f) => { if (MW(t, f) <= max) return t; while (t.length && MW(t + '…', f) > max) t = t.slice(0, -1); return t + '…'; };
   const NAVY = '#0B2545', BLUE = '#1668E3', INK = '#0B2545', INK3 = '#7489A3', LINE = '#D9E6F3';
   // background
   x.fillStyle = '#EEF5FC'; x.fillRect(0, 0, W, H);
@@ -1922,12 +1937,13 @@ async function buildBill(m, s) {
   y += 32; T('#' + o.order_number, PAD, y, `700 24px ${F1}`, INK); T(fmtD(o.order_date), W - PAD, y, `600 22px ${F1}`, INK, 'right');
   y += 40; T('ลูกค้า', PAD, y, `400 16px ${F1}`, INK3); y += 30; T(fit(c.name, W - PAD * 2, `600 21px ${F1}`), PAD, y, `600 21px ${F1}`, INK);
   y += 22;
-  o.items.forEach(i => {
+  o.items.forEach((i, k) => {
     x.strokeStyle = LINE; x.setLineDash([5, 5]); x.beginPath(); x.moveTo(PAD, y); x.lineTo(W - PAD, y); x.stroke(); x.setLineDash([]);
-    T(fit(i.name, W - PAD * 2 - 170, `500 20px ${F1}`), PAD, y + 30, `500 20px ${F1}`, INK);
-    T(`${n2(i.quantity)} ${i.unit} × ${baht(i.price)}`, PAD, y + 54, `400 16px ${F1}`, INK3);
+    const ln = names[k], ex = (ln.length - 1) * LH;
+    ln.forEach((t, j) => T(t, PAD, y + 30 + j * LH, IF, INK));                       // ชื่อสินค้ายาว: ขึ้นบรรทัดใหม่ได้ 2 บรรทัด
+    T(`${n2(i.quantity)} ${i.unit} × ${baht(i.price)}`, PAD, y + 54 + ex, `400 16px ${F1}`, INK3);
     T(baht(i.revenue), W - PAD, y + 34, `700 21px ${F1}`, INK, 'right');
-    y += itemH;
+    y += itemH + ex;
   });
   y += 20;
   const row = (l, v, col = INK) => { y += 34; T(l, PAD, y, `400 18px ${F1}`, INK3); T(v, W - PAD, y, `500 18px ${F1}`, col, 'right'); };
@@ -1961,8 +1977,9 @@ async function buildBill(m, s) {
     x2.drawImage(cv, 0, 0, W * S, (y + 40) * S, 0, 0, W * S, (y + 40) * S);
     x2.fillStyle = '#EEF5FC'; x2.fillRect(0, (y + 40) * S, W * S, (finalH - y - 40) * S);
     x2.scale(S, S); x2.fillStyle = '#fff'; rr(0, x2, 20, y + 10, W - 40, 40, 26); x2.fill(); x2.fillRect(20, y, W - 40, 30);
-    x2.font = `400 15px ${F1}`; x2.fillStyle = INK3; x2.textAlign = 'center'; x2.fillText([s.store.name, s.store.phone, s.store.line ? 'LINE ' + s.store.line : ''].filter(Boolean).join(' · '), W / 2, finalH - 28);
-    return c2;
+    const ft = [s.store.name, s.store.phone, s.store.line ? 'LINE ' + s.store.line : ''].filter(Boolean).join(' · '), ff = `400 15px ${F1}`;
+    x2.font = ff; x2.fillStyle = INK3; x2.textAlign = 'left'; x2.fillText(ft, W / 2 - MW(ft, ff) / 2, finalH - 28);
+    ms.remove(); return c2;
   }
 }
 async function saveBill(num) {
