@@ -978,7 +978,7 @@ function refreshForm(itemsToo) {
     $('#items').innerHTML = F.items.map((l, i) => {
       const lc = lineCalc(l), p = lc ? lc.p : P(l.product_id), m = lc ? lc.m : null, piece = p && tracksPcs(p);
       const prodSel = `<label class="f">สินค้า<select class="in" onchange="setLineProduct(${i},this.value)"><option value="">— เลือกสินค้า —</option>
-          ${CATS.map(cat => `<optgroup label="${cat}">${DB.products.filter(x => x.category === cat && (x.active || x.id === l.product_id)).map(x => `<option value="${x.id}" ${l.product_id === x.id ? 'selected' : ''}>${esc(x.name)}${x.size ? ' ' + esc(x.size) : ''}</option>`).join('')}</optgroup>`).join('')}</select></label>`;
+          ${CATS.map(cat => `<optgroup label="${cat}">${DB.products.filter(x => x.category === cat && (x.active || x.id === l.product_id)).map(x => `<option value="${x.id}" ${l.product_id === x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</optgroup>`).join('')}</select></label>`;
       const methSel = p ? `<label class="f">วิธีขาย<select class="in" onchange="setLineMethod(${i},this.value)">${methodsOf(p).map(x => `<option value="${x.id}" ${m && m.id === x.id ? 'selected' : ''}>${esc(x.name)} · ฿${n2(x.price)}/kg</option>`).join('')}</select></label>` : '';
       let ctl = '';
       if (m && m.type === 'PIECE_ACTUAL_WEIGHT') {
@@ -1032,6 +1032,7 @@ function metaLine(l, lc, i) {
   if (stockOn(p)) { if (tracksPcs(p) && !lc.pick) { const cs = countSellable(p.id, F.id); av = `<span class="muted">ของรวมขายได้ ${cs.pc} ตัว · ${fmtW(cs.g)}</span>`; }
     else if (!tracksPcs(p)) { const chk = stockNeedCheck({...F, items:[l]})[p.id]; if (chk) av = `<span style="color:${chk.ok ? 'var(--green)' : 'var(--red)'}">${chk.ok ? '✓' : '⚠'} ขายได้ (${F.channel || 'LINE'}) ${fmtW(chk.can)}</span>`; } }
   else av = '<span class="muted">ยังไม่ได้รับสินค้าเข้า (ไม่ติดตามสต็อก)</span>';
+  if (stockOn(p) && gradesInStock(p.id).length) av += `<span class="muted">ไซซ์ในสต็อก: ${gradesInStock(p.id).map(esc).join(', ')}</span>`;
   return `<span class="tag blue">ราคา ${lc.tier}</span>${l.override && lc.price !== lc.orig ? `<span class="tag or">แก้ราคาจาก ${baht(lc.orig)}/kg</span><button class="btn sm ghost" onclick="F.items[${i}].override=false;refreshForm(true)">ใช้ราคาตั้ง</button>` : ''}${lc.weighed ? '' : '<span class="tag or">≈ ประมาณการ · รอชั่งตอนแพ็ก</span>'}<span>ต้นทุน ${baht(lc.cost, 2)}/kg</span><span style="color:var(--blue)">กำไร ${baht(lc.profit)}</span>${av}`;
 }
 function refreshLine(i, typedPrice) {
@@ -1168,7 +1169,7 @@ function vYield() {
   const body = `<div class="grid" style="grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);align-items:start" id="ygrid">
     <div class="card"><h3>คำนวณต้นทุนจริงจากการซื้อ</h3>
       <div class="fgrid">
-        <label class="f" style="grid-column:1/-1">สินค้า<select class="in" onchange="Y.product_id=this.value;render()">${DB.products.map(x => `<option value="${x.id}" ${x.id === Y.product_id ? 'selected' : ''}>${esc(x.name)} ${esc(x.size)}</option>`).join('')}</select></label>
+        <label class="f" style="grid-column:1/-1">สินค้า<select class="in" onchange="Y.product_id=this.value;render()">${DB.products.map(x => `<option value="${x.id}" ${x.id === Y.product_id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
         <label class="f">น้ำหนักที่ซื้อ (kg)<input class="in num" type="number" inputmode="decimal" value="${Y.purchase_weight}" oninput="Y.purchase_weight=this.value;yRefresh()"></label>
         <label class="f">ราคาที่จ่าย (บาท)<input class="in num" type="number" inputmode="decimal" value="${Y.purchase_cost}" oninput="Y.purchase_cost=this.value;yRefresh()"></label>
         <label class="f">น้ำหนักที่ใช้ได้จริง (kg)<input class="in num" type="number" inputmode="decimal" value="${Y.usable_weight}" oninput="Y.usable_weight=this.value;yRefresh()"></label>
@@ -1182,7 +1183,7 @@ function vYield() {
     </div>
     <div class="stack">
       <div class="card"><h3>กำไรต่อ kg ของแต่ละสินค้า</h3><div class="tw"><table class="t"><thead><tr><th>สินค้า</th><th class="r">ต้นทุน</th><th class="r">Margin ปลีก</th><th class="r">Margin 20kg</th></tr></thead><tbody>
-        ${margins.map(({x, m, m20}) => `<tr><td>${esc(x.name)}<div class="small muted">${esc(x.size)}</div></td><td class="r num">${baht(x.cost_per_unit)}</td><td class="r num">${m.toFixed(0)}%</td><td class="r num" style="color:${m20 < 15 ? 'var(--red)' : 'inherit'}">${m20.toFixed(0)}%</td></tr>`).join('')}
+        ${margins.map(({x, m, m20}) => `<tr><td>${esc(x.name)}</td><td class="r num">${baht(x.cost_per_unit)}</td><td class="r num">${m.toFixed(0)}%</td><td class="r num" style="color:${m20 < 15 ? 'var(--red)' : 'inherit'}">${m20.toFixed(0)}%</td></tr>`).join('')}
       </tbody></table></div></div>
       <div class="card"><h3>ประวัติการคำนวณ</h3>${hist.length ? `<div class="tw"><table class="t"><thead><tr><th>วันที่</th><th>สินค้า</th><th class="r">Yield</th><th class="r">ต้นทุน/kg</th></tr></thead><tbody>${hist.map(h => `<tr><td class="small num">${fmtD(h.calculation_date)}</td><td class="small">${esc(P(h.product_id)?.name || '')}</td><td class="r num">${n2(h.yield_percent)}%</td><td class="r num"><b>${baht(h.final_cost, 2)}</b></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">ยังไม่มีประวัติ</div>'}</div>
     </div></div>`;
@@ -1254,7 +1255,7 @@ function vProducts(q) {
   const cat = q.cat || 'all'; let ps = DB.products; if (cat !== 'all') ps = ps.filter(p => p.category === cat);
   const body = `<div class="stack"><div class="row"><div class="seg">${['all', ...CATS].map(c => `<button class="${cat === c ? 'on' : ''}" onclick="go('#/products?cat=${c}')">${c === 'all' ? 'ทั้งหมด' : c}</button>`).join('')}</div></div>
   ${!DB.products.length ? '<div class="card empty">ยังไม่มีสินค้า<br><button class="btn pri" style="margin-top:12px" onclick="productModal()">＋ เพิ่มสินค้าแรก</button></div>' : ''}<div class="plist">${ps.map(p => `<div class="card prod ${p.active ? '' : 'off'}" onclick="productModal('${p.id}')" tabindex="0" onkeydown="if(event.key==='Enter')productModal('${p.id}')">
-    <div class="row" style="flex-wrap:nowrap"><div class="em">${CAT_EMOJI[p.category]}</div><div style="min-width:0"><b>${esc(p.name)}</b><div class="small muted">${esc(p.size)}${p.active ? '' : ' · ปิดขาย'}${p.show_on_catalog && p.active ? ' · <span style="color:var(--blue)">🛍 ในเมนู</span>' : ''}</div></div></div>
+    <div class="row" style="flex-wrap:nowrap"><div class="em">${CAT_EMOJI[p.category]}</div><div style="min-width:0"><b>${esc(p.name)}</b><div class="small muted">${gradesInStock(p.id).length ? 'ไซซ์ในสต็อก: ' + gradesInStock(p.id).map(esc).join(', ') : (stockOn(p) ? 'ไม่มีของ' : 'ยังไม่รับสินค้า')}${p.active ? '' : ' · ปิดขาย'}${p.show_on_catalog && p.active ? ' · <span style="color:var(--blue)">🛍 ในเมนู</span>' : ''}</div></div></div>
     <div class="stack" style="gap:4px">${methodsOf(p).map(m => `<div class="row small" style="justify-content:space-between;flex-wrap:nowrap;gap:8px"><span>${esc(m.name)}</span><b class="num">฿${n2(m.price)}/kg</b></div>`).join('')}</div>
 
     <div class="row small"><span class="muted">ต้นทุน</span><b class="num">${baht(p.cost_per_unit, 2)}</b><span class="muted">· Yield</span><span class="num">${n2(p.yield_percent)}%</span><span class="grow"></span><span class="small muted">${STYPE[p.stock_type] || ''}</span></div>
@@ -1263,7 +1264,7 @@ function vProducts(q) {
 }
 /* ----- ฟอร์มสินค้า: 1 สินค้า มีได้หลายวิธีขาย ----- */
 let PM = [];
-const newMethod = (type = 'WEIGHT') => ({id:uid('M'), name:type === 'PIECE_ACTUAL_WEIGHT' ? 'ขายเป็นตัว' : type === 'SIZE_GRADE_WEIGHT' ? '' : 'ชั่งกิโล', type, price:'', price_5kg:'', price_10kg:'', price_20kg:'', show:true});
+const newMethod = (type = 'WEIGHT') => ({id:uid('M'), name:type === 'PIECE_ACTUAL_WEIGHT' ? 'ขายเป็นตัว' : 'ขายตามน้ำหนัก', type, price:'', price_5kg:'', price_10kg:'', price_20kg:'', show:true});
 function productModal(id) {
   PIMG = null;
   const p = id ? P(id) : {name:'', category:'ปลา', size:'', unit:'kg', cost_per_unit:0, yield_percent:100, packaging_cost:0, active:true, notes:'', stock_type:'WEIGHT_ONLY', methods:[]};
@@ -1271,9 +1272,8 @@ function productModal(id) {
   const locked = id && DB.stock_lots.some(l => l.product_id === id);
   const f = (k, l, t = 'number', ph = '') => `<label class="f">${l}<input class="in ${t === 'number' ? 'num' : ''}" type="${t}" data-k="${k}" value="${esc(p[k] ?? '')}" placeholder="${ph}"></label>`;
   modal(id ? 'แก้ไขสินค้า' : 'เพิ่มสินค้า', `<div class="fgrid">${f('name', 'ชื่อสินค้า', 'text', 'เช่น ปลาจะละเม็ดดำ')}<label class="f">หมวด<select class="in" data-k="category">${CATS.map(c => `<option ${c === p.category ? 'selected' : ''}>${c}</option>`).join('')}</select></label>
-    ${f('size', 'ขนาด / เกรด (ไม่บังคับ)', 'text', 'ใส่ในวิธีขายได้')}
     <label class="f">นับสต็อกแบบ<select class="in" data-k="stock_type" ${locked ? 'disabled title="มี Lot แล้ว · ลบ Lot ทั้งหมดก่อนถ้าต้องการเปลี่ยน"' : ''} onchange="renderMethods()">${Object.entries(STYPE).map(([k, l]) => `<option value="${k}" ${(p.stock_type || 'WEIGHT_ONLY') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
-    <p class="small muted" style="margin:6px 0 0">สต็อกคือ "มีของอยู่เท่าไหร่" · วิธีขายคือ "ขายแบบไหน" — สินค้าเดียวมีได้หลายวิธีขาย ใช้สต็อกชุดเดียวกัน</p>
+    <p class="small muted" style="margin:6px 0 0">ตั้งชื่อสินค้าอย่างเดียว เช่น "ปลาจะละเม็ดดำ" · ไซซ์ เช่น 3–4 ตัว/kg ใส่ตอนรับสินค้าเข้าแต่ละ Lot · วิธีขายคือ "ขายแบบไหน" ใช้สต็อกชุดเดียวกัน</p>
     <div class="hd" style="margin:18px 0 8px"><h4 style="margin:0;font-size:14px">วิธีขาย (ราคาต่อ kg)</h4><div class="grow"></div><button class="btn sm" onclick="PM.push(newMethod());renderMethods()">＋ เพิ่มวิธีขาย</button></div>
     <div id="methods" class="stack" style="gap:10px"></div>
     <h4 style="margin:16px 0 8px;font-size:14px">ต้นทุน</h4><div class="fgrid">${f('cost_per_unit', 'ต้นทุนเริ่มต้น / kg')}${f('yield_percent', 'Yield %')}</div>
@@ -1286,8 +1286,8 @@ function productModal(id) {
 function renderMethods() {
   const el = $('#methods'); if (!el) return; const stEl = $('#ov [data-k=stock_type]'), piece = stEl && stEl.value === 'PIECE_BY_WEIGHT';
   el.innerHTML = PM.map((m, k) => `<div class="mrow">
-    <div class="fgrid"><label class="f">ชื่อวิธีขาย<input class="in" value="${esc(m.name)}" placeholder="${m.type === 'SIZE_GRADE_WEIGHT' ? 'เช่น 3–4 ตัว/kg' : 'เช่น ขายเป็นตัว'}" oninput="PM[${k}].name=this.value"></label>
-      <label class="f">แบบ<select class="in" onchange="PM[${k}].type=this.value;if(!PM[${k}].name||['ชั่งกิโล','ขายเป็นตัว'].includes(PM[${k}].name))PM[${k}].name=this.value==='PIECE_ACTUAL_WEIGHT'?'ขายเป็นตัว':this.value==='WEIGHT'?'ชั่งกิโล':'';renderMethods()">${Object.entries(METHOD_T).map(([t, l]) => `<option value="${t}" ${m.type === t ? 'selected' : ''} ${t === 'PIECE_ACTUAL_WEIGHT' && !piece ? 'disabled' : ''}>${l}</option>`).join('')}</select></label>
+    <div class="fgrid"><label class="f">ชื่อวิธีขาย<input class="in" value="${esc(m.name)}" placeholder="เช่น ขายตามน้ำหนัก, ขายเป็นตัว" oninput="PM[${k}].name=this.value"></label>
+      <label class="f">แบบ<select class="in" onchange="PM[${k}].type=this.value;if(!PM[${k}].name||['ชั่งกิโล','ขายเป็นตัว','ขายตามน้ำหนัก'].includes(PM[${k}].name))PM[${k}].name=this.value==='PIECE_ACTUAL_WEIGHT'?'ขายเป็นตัว':'ขายตามน้ำหนัก';renderMethods()">${Object.entries(METHOD_T).map(([t, l]) => `<option value="${t}" ${m.type === t ? 'selected' : ''} ${t === 'PIECE_ACTUAL_WEIGHT' && !piece ? 'disabled' : ''}>${l}</option>`).join('')}</select></label>
       <label class="f">ราคาปลีก (฿/kg)<input class="in num" type="number" inputmode="decimal" min="0" value="${m.price}" oninput="PM[${k}].price=this.value"></label></div>
     ${m.type === 'PIECE_ACTUAL_WEIGHT' && !piece ? '<p class="small" style="color:var(--red);margin:6px 0 0">ขายเป็นตัวต้องใช้ "นับสต็อกแบบ ตัว + น้ำหนัก"</p>' : ''}
     <div class="row" style="margin-top:8px"><details class="small" style="flex:1"><summary style="cursor:pointer;color:var(--ink-2)">ราคาส่ง (หลังบ้านเท่านั้น)${+m.price_5kg || +m.price_10kg || +m.price_20kg ? ' ✓' : ''}</summary>
@@ -1302,7 +1302,7 @@ async function saveProduct(id) {
   // วิธีขาย: ตรวจและแปลงเป็นตัวเลข
   const ms = PM.map(m => ({id:m.id || uid('M'), name:String(m.name || '').trim(), type:m.type, price:+m.price || 0, price_5kg:+m.price_5kg || 0, price_10kg:+m.price_10kg || 0, price_20kg:+m.price_20kg || 0, show:m.show !== false}));
   if (!ms.length) return toast('เพิ่มวิธีขายอย่างน้อย 1 วิธี');
-  if (ms.some(m => !m.name)) return toast('ตั้งชื่อวิธีขายให้ครบ เช่น "3–4 ตัว/kg" หรือ "ขายเป็นตัว"');
+  if (ms.some(m => !m.name)) return toast('ตั้งชื่อวิธีขายให้ครบ เช่น "ขายตามน้ำหนัก" หรือ "ขายเป็นตัว"');
   if (ms.some(m => !(m.price > 0))) return toast('ใส่ราคาปลีก (฿/kg) ของทุกวิธีขาย');
   if (!piece && ms.some(m => m.type === 'PIECE_ACTUAL_WEIGHT')) return toast('วิธี "ขายเป็นตัว" ต้องใช้การนับสต็อกแบบ ตัว + น้ำหนัก');
   v.methods = ms; v.unit = 'kg'; v.retail_price = ms[0].price; v.price_5kg = ms[0].price_5kg; v.price_10kg = ms[0].price_10kg; v.price_20kg = ms[0].price_20kg;   // field เดิม = วิธีขายแรก (ให้ส่วนอื่นของระบบใช้ต่อได้)
@@ -1701,7 +1701,7 @@ function deleteProduct(id) {
     p.active ? `<button class="btn pri" onclick="P('${id}').active=false;P('${id}').updated_at=new Date().toISOString();save();closeModal();toast('ปิดขายแล้ว');render()">ปิดขาย</button>` : '');
   const lots = DB.stock_lots.filter(l => l.product_id === id).length;
   if (lots) return modal('ลบสินค้าไม่ได้', `<p style="margin-top:0"><b>${esc(p.name)}</b> ยังมี Stock Lot ${lots} รายการ</p><p class="small muted">ลบ Lot ที่รับเข้าผิดก่อนที่หน้า Stock แล้วค่อยลบสินค้า</p>`, `<a class="btn pri" href="#/stock/${id}" onclick="closeModal()">ไปหน้า Stock ของสินค้านี้</a>`);
-  typedConfirm('ลบสินค้า', `ย้าย <b>${esc(p.name)} ${esc(p.size || '')}</b> ไปถังขยะ?<br><span class="small muted">หายจาก Products และเมนูลูกค้าทันที · กู้คืนได้ที่ Settings → ถังขยะ</span>`, id, 'ลบสินค้า', () => {
+  typedConfirm('ลบสินค้า', `ย้าย <b>${esc(p.name)}</b> ไปถังขยะ?<br><span class="small muted">หายจาก Products และเมนูลูกค้าทันที · กู้คืนได้ที่ Settings → ถังขยะ</span>`, id, 'ลบสินค้า', () => {
     DB.products = DB.products.filter(x => x.id !== id); DB.stock_allocations = DB.stock_allocations.filter(a => a.id !== id);
     DB.trash_products.push({...p, deleted_at:new Date().toISOString(), deleted_by:USER?.email || ''});
     save(); closeModal(); toast('ย้ายสินค้าไปถังขยะแล้ว'); go('#/products');
@@ -1737,7 +1737,7 @@ function deleteLot(lotId) {
 function trashCard() {
   const items = [...DB.trash_orders.map(o => ({col:'trash_orders', id:o.id, label:`🧾 <b class="num">${o.order_number}</b> · ${esc(C(o.customer_id).name)} · ${baht(o.total)}`, at:o.deleted_at, by:o.deleted_by, restore:`restoreOrder('${o.id}')`})),
     ...DB.trash_customers.map(c => ({col:'trash_customers', id:c.id, label:`👤 <b>${esc(c.name)}</b>`, at:c.deleted_at, by:c.deleted_by, restore:`restoreCustomer('${c.id}')`})),
-    ...DB.trash_products.map(p => ({col:'trash_products', id:p.id, label:`📦 <b>${esc(p.name)}</b> ${esc(p.size || '')} <span class="muted num">${p.id}</span>`, at:p.deleted_at, by:p.deleted_by, restore:`restoreProduct('${p.id}')`}))].sort((a, b) => b.at.localeCompare(a.at));
+    ...DB.trash_products.map(p => ({col:'trash_products', id:p.id, label:`📦 <b>${esc(p.name)}</b> <span class="muted num">${p.id}</span>`, at:p.deleted_at, by:p.deleted_by, restore:`restoreProduct('${p.id}')`}))].sort((a, b) => b.at.localeCompare(a.at));
   return `<div class="card"><h3>ถังขยะ</h3>${items.length ? `<div class="stack" style="gap:8px">${items.map(x => `<div class="row" style="justify-content:space-between;padding:10px 12px;border:1px solid var(--line);border-radius:12px"><span>${x.label}<br><span class="small muted">ลบเมื่อ ${fmtDT(x.at)}${x.by ? ' · ' + esc(x.by) : ''}</span></span><span class="row" style="gap:6px"><button class="btn sm" onclick="${x.restore}">กู้คืน</button>${isOwner() ? `<button class="btn sm danger" onclick="purge('${x.col}','${x.id}')">ลบถาวร</button>` : ''}</span></div>`).join('')}</div>` : '<p class="small muted" style="margin:0">ถังขยะว่าง</p>'}</div>`;
 }
 function usersCard() {
@@ -2085,27 +2085,28 @@ let RV = null;
 function receiveModal(pid) {
   if (!DB.products.length) return modal('รับสินค้าเข้า', '<p>ยังไม่มีสินค้า <a href="#/products" onclick="closeModal()">เพิ่มสินค้าที่หน้า Products</a> ก่อน</p>');
   const p0 = P(pid) || DB.products.find(p => p.active) || DB.products[0];
-  RV = {pid:p0.id, date:today(), type:p0.stock_type || 'WEIGHT_ONLY', lotmode:'count', kg:'', pcs:'', method:'quick', weights:'', cost:'', perkg:'', supplier:'', note:'', addCost:true, updCost:true};
+  RV = {pid:p0.id, date:today(), type:p0.stock_type || 'WEIGHT_ONLY', lotmode:'count', grade:gradesUsed(p0.id)[0] || p0.default_grade || '', kg:'', pcs:'', method:'quick', weights:'', cost:'', perkg:'', supplier:'', note:'', addCost:true, updCost:true};
   renderReceive();
 }
 function rvCalc() {
   const piece = RV.type === 'PIECE_BY_WEIGHT';
   if (piece && RV.lotmode === 'pieces') { const ws = String(RV.weights).split(/[\s,;]+/).map(Number).filter(x => x > 0); const g = Math.round(ws.reduce((a, b) => a + b, 0)); return {piece, each:true, ws, pcs:ws.length, g, avg:ws.length ? g / ws.length : 0}; }
-  const pcs = piece ? Math.round(+RV.pcs || 0) : 0, g = toG(RV.kg);
+  const pcs = Math.round(+RV.pcs || 0), g = toG(RV.kg);   // สินค้าน้ำหนักอย่างเดียว: จำนวนตัวเป็นข้อมูลของ Lot เท่านั้น
   return {piece, each:false, ws:null, pcs, g, avg:pcs ? g / pcs : 0};
 }
 function renderReceive() {
   const p = P(RV.pid), locked = DB.stock_lots.some(l => l.product_id === RV.pid), piece = RV.type === 'PIECE_BY_WEIGHT';
   modal('รับสินค้าเข้า', `<div class="fgrid">
-    <label class="f" style="grid-column:1/-1">สินค้า<select class="in" onchange="const q=P(this.value);RV.pid=this.value;RV.type=q.stock_type||'WEIGHT_ONLY';renderReceive()">${DB.products.map(x => `<option value="${x.id}" ${x.id === RV.pid ? 'selected' : ''}>${esc(x.name)} ${esc(x.size || '')}</option>`).join('')}</select></label>
+    <label class="f" style="grid-column:1/-1">สินค้า<select class="in" onchange="const q=P(this.value);RV.pid=this.value;RV.type=q.stock_type||'WEIGHT_ONLY';RV.grade=gradesUsed(q.id)[0]||q.default_grade||'';renderReceive()">${DB.products.map(x => `<option value="${x.id}" ${x.id === RV.pid ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
     <label class="f">วันที่รับ<input type="date" class="in" value="${RV.date}" oninput="RV.date=this.value"></label>
+    <label class="f">Size / Grade ของ Lot นี้ (ไม่บังคับ)<input class="in" list="gradelist" value="${esc(RV.grade)}" placeholder="เช่น 3–4 ตัว/kg" oninput="RV.grade=this.value"><datalist id="gradelist">${[...new Set([...gradesUsed(p.id), p.default_grade].filter(Boolean))].map(g => `<option value="${esc(g)}">`).join('')}</datalist></label>
     <label class="f">วิธีนับสต็อก<select class="in" ${locked ? 'disabled title="สินค้านี้มี Lot แล้ว เปลี่ยนวิธีนับได้ที่หน้า Products ถ้ายังไม่มีการเคลื่อนไหว"' : ''} onchange="RV.type=this.value;renderReceive()">${Object.entries(STYPE).map(([k, l]) => `<option value="${k}" ${RV.type === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
   </div>
   ${methodsOf(p).length ? `<p class="small muted" style="margin:8px 0 0">วิธีขาย: ${methodsOf(p).map(m => `<b>${esc(m.name)}</b> ฿${n2(m.price)}/kg`).join(' · ')}</p>` : ''}
   <div style="margin-top:14px">${piece ? `<div class="seg" style="margin-bottom:10px"><button class="${RV.lotmode !== 'pieces' ? 'on' : ''}" onclick="RV.lotmode='count';renderReceive()">น้ำหนักรวม</button><button class="${RV.lotmode === 'pieces' ? 'on' : ''}" onclick="RV.lotmode='pieces';renderReceive()">ชั่งรายตัว</button></div>
     ${RV.lotmode === 'pieces' ? `<label class="f">น้ำหนักแต่ละตัว (กรัม) · คั่นด้วยเว้นวรรคหรือขึ้นบรรทัดใหม่<textarea class="in num" placeholder="555&#10;658&#10;620" oninput="RV.weights=this.value;rvSum()">${esc(RV.weights)}</textarea></label><p class="small muted" style="margin:6px 0 0">ไม่บังคับ · ชั่งรายตัวเมื่ออยากให้ลูกค้าเลือกตัวได้ (เมนูแสดงน้ำหนักและราคาของแต่ละตัว)</p>`
       : `<div class="fgrid"><label class="f">จำนวน (ตัว)<input class="in num" type="number" inputmode="numeric" min="0" value="${RV.pcs}" oninput="RV.pcs=this.value;rvSum()"></label><label class="f">น้ำหนักรวม (kg)<input class="in num" type="number" inputmode="decimal" step="0.001" min="0" value="${RV.kg}" oninput="RV.kg=this.value;rvSum()"></label></div>`}`
-    : `<div class="fgrid"><label class="f">น้ำหนัก (kg)<input class="in num" type="number" inputmode="decimal" step="0.001" min="0" value="${RV.kg}" oninput="RV.kg=this.value;rvSum()"></label></div>`}
+    : `<div class="fgrid"><label class="f">น้ำหนัก (kg)<input class="in num" type="number" inputmode="decimal" step="0.001" min="0" value="${RV.kg}" oninput="RV.kg=this.value;rvSum()"></label><label class="f">จำนวนตัว (ไม่บังคับ)<input class="in num" type="number" inputmode="numeric" min="0" value="${RV.pcs}" oninput="RV.pcs=this.value;rvSum()"></label></div>`}
   </div>
   <div class="fgrid" style="margin-top:12px"><label class="f">ราคาที่จ่ายทั้งหมด (฿)<input class="in num" id="rvcost" type="number" inputmode="decimal" min="0" value="${RV.cost}" oninput="RV.cost=this.value;RV.perkg='';rvSum()"></label><label class="f">หรือราคาต่อ kg (฿)<input class="in num" id="rvperkg" type="number" inputmode="decimal" min="0" value="${RV.perkg}" oninput="RV.perkg=this.value;RV.cost='';rvSum()"></label></div>
   <div id="rvsum" class="profitbox totals" style="margin-top:12px"></div>
@@ -2127,13 +2128,13 @@ function saveReceive() {
   const now = new Date().toISOString();
   if (!DB.stock_lots.some(l => l.product_id === p.id)) { p.stock_type = RV.type; p.unit = 'kg'; }
   p.stock_enabled = true; p.updated_at = now;
-  const lot = {id:uid('L'), lot_code:lotCode(RV.date), product_id:p.id, received_at:RV.date, supplier:RV.supplier.trim(), received_g:c.g, received_pcs:c.pcs || null, piece_weights:c.ws, cost_total:k.total, cost_per_kg:Math.round(k.perkg * 100) / 100, notes:RV.note.trim(), created_at:now, created_by:USER?.email || ''};
+  const lot = {id:uid('L'), lot_code:lotCode(RV.date), product_id:p.id, received_at:RV.date, supplier:RV.supplier.trim(), grade:String(RV.grade || '').trim(), received_g:c.g, received_pcs:c.pcs || null, piece_weights:c.ws, cost_total:k.total, cost_per_kg:Math.round(k.perkg * 100) / 100, notes:RV.note.trim(), created_at:now, created_by:USER?.email || ''};
   if (isPBW(p)) { lot.mode = c.each ? 'pieces' : 'count'; if (c.each) lot.pieces = c.ws.map(g => ({id:uid('F'), g:Math.round(g)})); }
   DB.stock_lots.push(lot);
-  mv({type:'RECEIVE', product_id:p.id, lot_id:lot.id, grams:c.g, pcs:c.pcs || 0, reason:`รับเข้า ${lot.lot_code}${lot.supplier ? ' · ' + lot.supplier : ''}`});
-  if (RV.addCost && k.total > 0) DB.costs.push({id:uid('K'), date:RV.date, category:p.category, description:`รับ${p.name} ${fmtW(c.g)} (${lot.lot_code})${lot.supplier ? ' — ' + lot.supplier : ''}`, amount:k.total, paid:0, notes:'จากรับสินค้าเข้า', lot_id:lot.id});
+  mv({type:'RECEIVE', product_id:p.id, lot_id:lot.id, grams:c.g, pcs:tracksPcs(p) ? (c.pcs || 0) : 0, reason:`รับเข้า ${lot.lot_code}${lot.grade ? ' · ' + lot.grade : ''}${lot.supplier ? ' · ' + lot.supplier : ''}`});
+  if (RV.addCost && k.total > 0) DB.costs.push({id:uid('K'), date:RV.date, category:p.category, description:`รับ${p.name}${lot.grade ? ' ' + lot.grade : ''} ${fmtW(c.g)} (${lot.lot_code})${lot.supplier ? ' — ' + lot.supplier : ''}`, amount:k.total, paid:0, notes:'จากรับสินค้าเข้า', lot_id:lot.id});
   if (RV.updCost && k.total > 0) p.cost_per_unit = Math.round(k.perkg * 100) / 100;      // ต้นทุนต่อ kg เสมอ
-  save(); closeModal(); toast(`รับเข้า ${lot.lot_code} · ${c.pcs ? c.pcs + ' ตัว · ' : ''}${fmtW(c.g)}`); render();
+  save(); closeModal(); toast(`รับเข้า ${lot.lot_code}${lot.grade ? ' · ' + lot.grade : ''} · ${c.pcs ? c.pcs + ' ตัว · ' : ''}${fmtW(c.g)}`); render();
 }
 
 /* ----- Adjust / count ----- */
@@ -2211,9 +2212,9 @@ function vStock() {
     ${pend.length ? `<div class="note" style="border-color:var(--orange)"><b>รอชั่งน้ำหนักจริง ${pend.length} รายการ</b> · ยังไม่ตัดสต็อกจนกว่าจะชั่งตอนแพ็ก<div class="row" style="margin-top:8px">${[...new Set(pend.map(x => x.o.id))].map(oid => { const o = DB.orders.find(z => z.id === oid); return `<button class="btn sm" onclick="weighModal('${oid}')">⚖️ ${o.order_number}</button>`; }).join('')}</div></div>` : ''}
     <div class="grid g3"><div class="card kpi"><div class="k">สินค้าที่ติดตามสต็อก</div><div class="v num">${on.length}</div></div><div class="card kpi"><div class="k">มูลค่าสต็อกคงเหลือ (ตามต้นทุน Lot)</div><div class="v num">${baht(val)}</div></div><div class="card kpi"><div class="k">จองให้ออเดอร์อยู่</div><div class="v num">${DB.stock_reservations.filter(r => r.status === 'active').length} รายการ</div></div></div>
     <div class="card">${on.length ? `<div class="tw"><table class="t cards stk"><thead><tr><th>สินค้า</th><th class="r">Physical</th><th class="r hide-m">Allocated</th><th class="r">Reserved</th><th class="r">Available</th></tr></thead><tbody>
-      ${on.map(p => { const st = stockOf(p.id), c = stockCells(st); return `<tr class="click" onclick="go('#/stock/${p.id}')"><td><b>${esc(p.name)}</b><div class="small muted">${[esc(p.size || ''), STYPE[p.stock_type] || ''].filter(Boolean).join(' · ')}</div></td><td class="r num">${c.phys}</td><td class="r num hide-m">${c.alloc}</td><td class="r num">${c.res}</td><td class="r num">${c.avail}</td></tr>`; }).join('')}
+      ${on.map(p => { const st = stockOf(p.id), c = stockCells(st); return `<tr class="click" onclick="go('#/stock/${p.id}')"><td><b>${esc(p.name)}</b><div class="small muted">${[gradesInStock(p.id).map(esc).join(', '), STYPE[p.stock_type] || ''].filter(Boolean).join(' · ')}</div></td><td class="r num">${c.phys}</td><td class="r num hide-m">${c.alloc}</td><td class="r num">${c.res}</td><td class="r num">${c.avail}</td></tr>`; }).join('')}
     </tbody></table></div>` : `<div class="empty">ยังไม่มีสินค้าที่ติดตามสต็อก<br><button class="btn pri" style="margin-top:12px" onclick="receiveModal()">＋ รับสินค้าเข้าครั้งแรก</button></div>`}</div>
-    ${off.length && on.length ? `<div class="card"><h3>ยังไม่ได้ติดตามสต็อก</h3><p class="small muted" style="margin-top:0">รับสินค้าเข้าครั้งแรกเพื่อเริ่มนับ · ก่อนหน้านั้นออเดอร์จะไม่ตัดสต็อกสินค้าเหล่านี้</p><div class="row">${off.map(p => `<button class="btn sm" onclick="receiveModal('${p.id}')">＋ ${esc(p.name)} ${esc(p.size || '')}</button>`).join('')}</div></div>` : ''}
+    ${off.length && on.length ? `<div class="card"><h3>ยังไม่ได้ติดตามสต็อก</h3><p class="small muted" style="margin-top:0">รับสินค้าเข้าครั้งแรกเพื่อเริ่มนับ · ก่อนหน้านั้นออเดอร์จะไม่ตัดสต็อกสินค้าเหล่านี้</p><div class="row">${off.map(p => `<button class="btn sm" onclick="receiveModal('${p.id}')">＋ ${esc(p.name)}</button>`).join('')}</div></div>` : ''}
   </div>`;
   return shell('stock', 'Stock', 'สต็อกจริงชุดเดียว → จัดสรรช่องทาง → จอง → ขาย', `<button class="btn pri" onclick="receiveModal()">＋ รับสินค้าเข้า</button>`, body);
 }
@@ -2237,14 +2238,14 @@ function vStockProduct(pid) {
     </div>
     ${tracksPcs(p) ? piecesSection(p) : ''}
     <div class="card"><h3>Stock Lots</h3>${st.lots.length ? `<div class="tw"><table class="t cards"><thead><tr><th>Lot</th><th>รับเมื่อ</th><th class="r">รับเข้า</th><th class="r">ต้นทุน</th><th class="r">คงเหลือ</th><th></th></tr></thead><tbody>
-      ${st.lots.slice().reverse().map(l => { const r = st.rem[l.id]; return `<tr><td><b class="num">${l.lot_code}</b>${l.mode ? ` <span class="tag">${l.mode === 'pieces' ? '🐟 รายตัว' : '⚖️ กิโลรวม'}</span>` : ''}${l.supplier ? `<div class="small muted">${esc(l.supplier)}</div>` : ''}${l.piece_weights ? `<details class="small"><summary class="muted" style="cursor:pointer">น้ำหนักรายตัว ${l.piece_weights.length} ตัว</summary><span class="num">${l.piece_weights.join(', ')} g</span></details>` : ''}${l.notes ? `<div class="small muted">${esc(l.notes)}</div>` : ''}</td><td class="small muted num">${fmtD(l.received_at)}</td><td class="r num">${fmtW(l.received_g)}${l.received_pcs ? `<div class="small muted">${l.received_pcs} ตัว</div>` : ''}</td><td class="r num">${baht(l.cost_per_kg, 2)}/kg<div class="small muted">${baht(l.cost_total, 2)}</div></td><td class="r num"><b>${fmtW(r.g)}</b>${piece || l.received_pcs ? `<div class="small muted">${r.pc} ตัว</div>` : ''}</td><td class="r"><button class="btn sm ghost danger" title="ลบ Lot ที่รับเข้าผิด" aria-label="ลบ Lot ${l.lot_code}" onclick="deleteLot('${l.id}')">🗑</button></td></tr>`; }).join('')}
+      ${st.lots.slice().reverse().map(l => { const r = st.rem[l.id]; return `<tr><td><b class="num">${l.lot_code}</b>${l.grade ? ` <span class="tag blue">${esc(l.grade)}</span>` : ''}${l.mode ? ` <span class="tag">${l.mode === 'pieces' ? '🐟 รายตัว' : '⚖️ กิโลรวม'}</span>` : ''}${l.supplier ? `<div class="small muted">${esc(l.supplier)}</div>` : ''}${l.piece_weights ? `<details class="small"><summary class="muted" style="cursor:pointer">น้ำหนักรายตัว ${l.piece_weights.length} ตัว</summary><span class="num">${l.piece_weights.join(', ')} g</span></details>` : ''}${l.notes ? `<div class="small muted">${esc(l.notes)}</div>` : ''}</td><td class="small muted num">${fmtD(l.received_at)}</td><td class="r num">${fmtW(l.received_g)}${l.received_pcs ? `<div class="small muted">${l.received_pcs} ตัว</div>` : ''}</td><td class="r num">${baht(l.cost_per_kg, 2)}/kg<div class="small muted">${baht(l.cost_total, 2)}</div></td><td class="r num"><b>${fmtW(r.g)}</b>${piece || l.received_pcs ? `<div class="small muted">${r.pc} ตัว</div>` : ''}</td><td class="r"><button class="btn sm ghost danger" title="ลบ Lot ที่รับเข้าผิด" aria-label="ลบ Lot ${l.lot_code}" onclick="deleteLot('${l.id}')">🗑</button></td></tr>`; }).join('')}
     </tbody></table></div>` : '<div class="empty">ยังไม่มี Lot</div>'}</div>
     <div class="card"><h3>ประวัติการเคลื่อนไหว</h3>${mvs.length ? `<div class="tw"><table class="t cards"><thead><tr><th>เวลา</th><th>รายการ</th><th class="r">จำนวน</th><th>อ้างอิง</th></tr></thead><tbody>
       ${mvs.map(m => { const o = m.order_id ? (DB.orders.find(x => x.id === m.order_id) || DB.trash_orders.find(x => x.id === m.order_id)) : null; const phys = PHYS.has(m.type);
         return `<tr><td class="small muted num">${fmtDT(m.at)}</td><td><b>${MVT[m.type]}</b>${phys ? '' : ' <span class="tag">ไม่กระทบ Physical</span>'}<div class="small muted">${esc(m.reason)}${m.lot_id ? ' · ' + lotCode_(m.lot_id) : ''}</div></td><td class="r num" style="color:${!phys ? 'var(--ink-3)' : m.grams < 0 || m.pcs < 0 ? 'var(--red)' : 'var(--green)'}">${m.grams ? (m.grams > 0 ? '+' : '') + fmtW(m.grams) : ''}${m.pcs ? `<div>${m.pcs > 0 ? '+' : ''}${m.pcs} ตัว</div>` : ''}</td><td class="small">${o ? `<a class="num" href="#/order/${o.order_number}">${o.order_number}</a>` : ''}<div class="muted">${esc(m.by || '')}</div></td></tr>`; }).join('')}
     </tbody></table></div>` : '<div class="empty">ยังไม่มีการเคลื่อนไหว</div>'}</div>
   </div>`;
-  return shell('stock', esc(p.name) + (p.size ? ' <span class="muted" style="font-size:.6em">' + esc(p.size) + '</span>' : ''), STYPE[p.stock_type] || '', `<a class="btn" href="#/stock">‹ Stock</a>`, body);
+  return shell('stock', esc(p.name), [STYPE[p.stock_type] || '', gradesInStock(p.id).length ? 'ไซซ์ในสต็อก: ' + gradesInStock(p.id).map(esc).join(', ') : ''].filter(Boolean).join(' · '), `<a class="btn" href="#/stock">‹ Stock</a>`, body);
 }
 
 /* =========================================================
@@ -2280,13 +2281,14 @@ function catalogProduct(p, i) {
   const img = /^rtdb:/.test(p.image_url || '') ? +((p.image_url.split('v=')[1]) || 1) : 0;
   const hl = String(p.catalog_highlights || '').split('\n').map(s => s.trim()).filter(Boolean).slice(0, 8);
   const ms = methodsOf(p).filter(m => m.show !== false && +m.price > 0);
-  const o = {slug:slugOf(p), name:String(p.name || ''), size:String(p.size || ''), category:String(p.category || ''), cat_slug:CAT_SLUG[p.category] || '',
+  const grades = gradesInStock(p.id);
+  const o = {slug:slugOf(p), name:String(p.name || ''), size:grades.length === 1 ? grades[0] : '', grades, category:String(p.category || ''), cat_slug:CAT_SLUG[p.category] || '',
     unit:'kg', retail_price:ms.length ? Math.min(...ms.map(m => +m.price)) : 0, description:String(p.catalog_description || '').slice(0, 600), highlights:hl,
     featured:!!p.catalog_featured, status:catalogStatus(p), last_received:lastReceived(p.id) || '', image_v:img, sort:i,
     methods:ms.map(m => ({name:String(m.name || ''), type:m.type, price:Math.round(+m.price * 100) / 100}))};   // ราคาปลีกของแต่ละวิธีขายเท่านั้น (ไม่มีราคาส่ง)
   const pm = ms.find(m => m.type === 'PIECE_ACTUAL_WEIGHT');
   if (pm && tracksPcs(p) && stockOn(p))   // ปลารายตัวที่ชั่งไว้และยังว่าง: น้ำหนัก + ราคา (ไม่มีรหัส Lot/ต้นทุน)
-    o.pieces = pieceStates(p.id).filter(x => x.state === 'available').sort((a, b) => b.g - a.g).slice(0, 40).map(x => ({g:x.g, price:priceOfG(x.g, pm.price)}));
+    o.pieces = pieceStates(p.id).filter(x => x.state === 'available').sort((a, b) => b.g - a.g).slice(0, 40).map(x => { const gr = (DB.stock_lots.find(l => l.id === x.lot_id) || {}).grade; return gr ? {g:x.g, price:priceOfG(x.g, pm.price), grade:gr} : {g:x.g, price:priceOfG(x.g, pm.price)}; });
   if (pm && tracksPcs(p) && stockOn(p)) { const st = stockOf(p.id); if (st.pc > 0 && st.g > 0) o.avg_piece_g = Math.round(st.g / st.pc / 10) * 10; }   // น้ำหนักเฉลี่ยต่อตัว (ข้อมูลประกอบ)
   return o;
 }
@@ -2384,7 +2386,16 @@ function menuCard() {
    - Stock Lot : ของที่รับเข้าจริง (ไม่ผูกกับวิธีขาย) · สินค้านับตัว: lot.mode 'count' (ตัว+น้ำหนักรวม) หรือ 'pieces' (ชั่งรายตัว)
    - Order Item: วิธีขาย + น้ำหนักจริง (กรัม) + จำนวนตัวจริง · ถ้ายังไม่รู้น้ำหนักจริง = "รอชั่งตอนแพ็ก" (ยังไม่ตัดสต็อก/ยังไม่ส่ง QR)
    ========================================================= */
-const METHOD_T = {WEIGHT:'⚖️ ชั่งกิโล', SIZE_GRADE_WEIGHT:'📏 ตามไซซ์ (ราคาต่อ kg)', PIECE_ACTUAL_WEIGHT:'🐟 ขายเป็นตัว (คิดตามน้ำหนักจริง)'};
+const METHOD_T = {WEIGHT:'⚖️ ขายตามน้ำหนัก', PIECE_ACTUAL_WEIGHT:'🐟 ขายเป็นตัว (คิดตามน้ำหนักจริง)'};
+const GRADE_RE = /ตัว\s*\/\s*(kg|กก|โล|กิโล)|^\s*\d+\s*[–-]\s*\d+/i;            // ข้อความที่เป็นไซซ์ เช่น "3–4 ตัว/kg"
+/* ไซซ์/เกรด = ข้อมูลของ Stock Lot (ไม่ใช่ของสินค้า) · ไซซ์ที่ยังมีของ เรียงตาม Lot ที่รับก่อน */
+function gradesInStock(pid) {   // เฉพาะ Lot ที่ยังมีของขายได้ (ปลารายตัวที่ถูกจอง/ขายแล้วไม่นับ)
+  const st = stockOf(pid), p = P(pid), out = [];
+  const avail = p && tracksPcs(p) ? (() => { const a = {}, free = freeByLot(pid); pieceStates(pid).forEach(x => { if (x.state === 'available') a[x.lot_id] = 1; }); Object.entries(free).forEach(([id, f]) => { if (f.g > 0) a[id] = 1; }); return a; })() : null;
+  st.lots.forEach(l => { const g = (l.grade || '').trim(); const has = avail ? !!avail[l.id] : (st.rem[l.id].g > 0); if (g && has && !out.includes(g)) out.push(g); });
+  return out;
+}
+const gradesUsed = pid => [...new Set(DB.stock_lots.filter(l => l.product_id === pid && l.grade).sort(fifo).reverse().map(l => l.grade.trim()))];
 const isPBW = p => !!p && p.stock_type === 'PIECE_BY_WEIGHT';          // นับตัว + น้ำหนัก
 const tracksPcs = isPBW;
 const methodsOf = p => (p && Array.isArray(p.methods) && p.methods.length) ? p.methods : [];
@@ -2402,11 +2413,15 @@ function migrateModel(d) {
   [...d.products, ...d.trash_products].forEach(p => {
     const old = p.stock_type || 'WEIGHT_ONLY';
     if (!Array.isArray(p.methods) || !p.methods.length) {
-      const type = old === 'SIZE_GRADE_WEIGHT' ? 'SIZE_GRADE_WEIGHT' : (old === 'PIECE_AND_WEIGHT' || old === 'PIECE_BY_WEIGHT') ? 'PIECE_ACTUAL_WEIGHT' : 'WEIGHT';
-      p.methods = [{id:'M1', name:type === 'SIZE_GRADE_WEIGHT' ? (p.size || 'ตามไซซ์') : type === 'PIECE_ACTUAL_WEIGHT' ? 'ขายเป็นตัว' : 'ชั่งกิโล', type,
+      const type = (old === 'PIECE_AND_WEIGHT' || old === 'PIECE_BY_WEIGHT') ? 'PIECE_ACTUAL_WEIGHT' : 'WEIGHT';
+      p.methods = [{id:'M1', name:type === 'PIECE_ACTUAL_WEIGHT' ? 'ขายเป็นตัว' : 'ขายตามน้ำหนัก', type,
         price:+p.retail_price || 0, price_5kg:+p.price_5kg || 0, price_10kg:+p.price_10kg || 0, price_20kg:+p.price_20kg || 0, show:true}];
       fixed = true;
     } else p.methods = Object.values(p.methods);
+    p.methods.forEach(m => { if (m.type === 'SIZE_GRADE_WEIGHT') { m.type = 'WEIGHT'; if (!m.name || m.name === p.size || GRADE_RE.test(m.name) || m.name === 'ตามไซซ์') m.name = 'ขายตามน้ำหนัก'; fixed = true; } });
+    if ((p.size || '').trim()) {   // ไซซ์ที่เคยใส่ไว้กับสินค้า → ย้ายไปเป็นไซซ์ของ Lot เดิม และเป็นค่าแนะนำตอนรับเข้าครั้งถัดไป
+      d.stock_lots.forEach(l => { if (l.product_id === p.id && !l.grade) l.grade = p.size.trim(); });
+      p.default_grade = p.size.trim(); p.size = ''; fixed = true; }
     const st = (old === 'PIECE_AND_WEIGHT' || old === 'PIECE_BY_WEIGHT') ? 'PIECE_BY_WEIGHT' : 'WEIGHT_ONLY';
     if (p.stock_type !== st || p.unit !== 'kg') { p.stock_type = st; p.unit = 'kg'; fixed = true; }
   });
@@ -2539,9 +2554,10 @@ function piecesSection(p) {
   const ord = {available:0, reserved:1, sold:2, pooled:3, spoiled:4}, ps = pieceStates(p.id).sort((a, b) => ord[a.state] - ord[b.state] || b.g - a.g);
   const free = countSellable(p.id), pm = methodsOf(p).find(m => m.type === 'PIECE_ACTUAL_WEIGHT'), av = ps.filter(x => x.state === 'available').length;
   return `<div class="card"><div class="hd"><h3>🐟 ตัว + น้ำหนัก</h3><div class="grow"></div><span class="small muted">ปลารายตัวว่าง ${av} ตัว · ของรวม ${free.pc} ตัว ${fmtW(free.g)}</span></div>
-    ${ps.length ? `<div class="tw"><table class="t cards"><thead><tr><th>ปลารายตัว</th><th class="r">${pm ? `ราคา (${pm.name} ฿${n2(pm.price)}/kg)` : 'ราคา'}</th><th>Lot</th><th>สถานะ</th><th></th></tr></thead><tbody>
+    ${ps.length ? `<div class="tw"><table class="t cards"><thead><tr><th>ปลารายตัว</th><th>ไซซ์ Lot</th><th class="r">${pm ? `ราคา (${pm.name} ฿${n2(pm.price)}/kg)` : 'ราคา'}</th><th>Lot</th><th>สถานะ</th><th></th></tr></thead><tbody>
     ${ps.map(x => { const o = x.order_id ? DB.orders.find(z => z.id === x.order_id) : null;
-      return `<tr><td><b class="num">${fmtW(x.g)}</b></td><td class="r num">${pm ? baht(priceOfG(x.g, pm.price)) : '—'}</td><td class="small muted num">${x.lot_code}</td><td><span class="${PSTATE[x.state][1]}">${PSTATE[x.state][0]}</span>${o ? ` <a class="small num" href="#/order/${o.order_number}">${o.order_number}</a>` : ''}</td>
+      const lg = (DB.stock_lots.find(l => l.id === x.lot_id) || {}).grade || '';
+      return `<tr><td><b class="num">${fmtW(x.g)}</b></td><td class="small">${esc(lg) || '<span class="muted">—</span>'}</td><td class="r num">${pm ? baht(priceOfG(x.g, pm.price)) : '—'}</td><td class="small muted num">${x.lot_code}</td><td><span class="${PSTATE[x.state][1]}">${PSTATE[x.state][0]}</span>${o ? ` <a class="small num" href="#/order/${o.order_number}">${o.order_number}</a>` : ''}</td>
       <td class="r">${x.state === 'available' ? `<div class="row" style="justify-content:flex-end;gap:6px;flex-wrap:nowrap"><button class="btn sm" onclick="poolPiece('${p.id}','${x.id}')">ปลดเป็นของรวม</button><button class="btn sm ghost danger" onclick="spoilPiece('${p.id}','${x.id}')">เสีย</button></div>` : ''}</td></tr>`; }).join('')}
     </tbody></table></div>` : '<p class="small muted" style="margin:0">ยังไม่มีปลาที่ชั่งรายตัว · รับเข้าแบบ "ชั่งรายตัว" ถ้าต้องการให้ลูกค้าเลือกตัวได้</p>'}</div>`;
 }
