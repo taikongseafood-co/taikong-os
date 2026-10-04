@@ -43,9 +43,9 @@
   --navy:#040F1F; --navy-2:#0A1E38; --red-soft:#3A1A1F; --orange-soft:#3A2812; --green-soft:#0F3326; --grey-soft:#1A2D47;
   --shadow:0 1px 2px rgba(0,0,0,.3);
 }
-html{scroll-padding-top:env(safe-area-inset-top,0px);height:100%}
+html{scroll-padding-top:env(safe-area-inset-top,0px);height:100%;overscroll-behavior-x:none}
 *,*::before,*::after{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+body{overscroll-behavior-x:none;margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
 button,input,select,textarea{font:inherit;color:inherit}
 a{color:var(--blue)}
 .num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
@@ -202,7 +202,7 @@ table.t{width:100%;border-collapse:collapse;font-size:14px}
 .prod.off{opacity:.55}
 
 /* ---------- Modal / toast ---------- */
-.ov{position:fixed;inset:0;background:rgba(4,15,31,.5);display:flex;align-items:flex-start;justify-content:center;z-index:50;padding:40px 16px;overflow:auto}
+.ov{overscroll-behavior:contain;position:fixed;inset:0;background:rgba(4,15,31,.5);display:flex;align-items:flex-start;justify-content:center;z-index:50;padding:40px 16px;overflow:auto}
 .modal{background:var(--surface);border-radius:20px;width:100%;max-width:560px;padding:22px;box-shadow:0 20px 60px rgba(4,15,31,.3)}
 .modal h3{margin:0 0 14px;font-size:18px}
 .modal .acts{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
@@ -378,6 +378,8 @@ ol.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;c
 .oline .x{position:absolute;right:4px;top:2px;border:0;background:transparent;cursor:pointer;color:var(--ink-3);font-size:22px;min-width:40px;min-height:40px}
 .oline .x:hover{color:var(--red)}
 .oline .meta{display:flex;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-3);align-items:center}
+.discard{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:14px;padding:10px 12px;border-radius:12px;background:var(--orange-soft);color:var(--orange);font-weight:600;font-size:14px}
+.discard .grow{flex:1}
 .sheet{position:fixed;inset:auto 0 0 0;background:var(--surface);border-radius:20px 20px 0 0;padding:16px 16px calc(20px + env(safe-area-inset-bottom,0px));z-index:55;display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .sheet a{display:flex;flex-direction:column;align-items:center;gap:4px;padding:14px 6px;border-radius:14px;background:var(--surface-2);text-decoration:none;color:var(--ink);font-size:13px}
 .sheet a .ic{font-size:22px}
@@ -719,13 +721,25 @@ async function copyText(t) {
   catch (e) { const ta = document.createElement('textarea'); ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } catch (_) {} ta.remove(); }
   toast('คัดลอกแล้ว');
 }
+/* หน้าต่าง (modal): ไม่ปิดเมื่อคลิกพื้นที่ว่าง · ถ้ามีข้อมูลที่ยังไม่บันทึก จะถามก่อนปิด (Esc / ปิด / Back) */
+let MODAL_DIRTY = false;
 function modal(title, body, acts = '') {
   closeModal();
   const ov = document.createElement('div'); ov.className = 'ov'; ov.id = 'ov';
-  ov.innerHTML = `<div class="modal" role="dialog" aria-label="${esc(title)}"><h3>${esc(title)}</h3>${body}<div class="acts">${acts}<button class="btn" onclick="closeModal()">ปิด</button></div></div>`;
-  ov.addEventListener('click', e => { if (e.target === ov) closeModal(); });
-  document.body.appendChild(ov); const f = ov.querySelector('input,select,textarea'); if (f) f.focus();
+  ov.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-label="${esc(title)}"><h3>${esc(title)}</h3>${body}<div class="acts">${acts}<button class="btn" onclick="tryCloseModal()">ปิด</button></div></div>`;
+  ov.addEventListener('input', () => { MODAL_DIRTY = true; hideDiscard(); });
+  ov.addEventListener('change', e => { if (e.target.type !== 'file') MODAL_DIRTY = true; });
+  document.body.appendChild(ov); MODAL_DIRTY = false;
+  const f = ov.querySelector('input:not([type=checkbox]):not([type=file]),select,textarea'); if (f && matchMedia('(pointer:fine)').matches) f.focus();
 }
+function tryCloseModal() { if ($('#ov') && MODAL_DIRTY) return askDiscard(); closeModal(); }
+function askDiscard() {
+  const m = $('#ov .modal'); if (!m || $('#discard')) return;
+  const d = document.createElement('div'); d.id = 'discard'; d.className = 'discard';
+  d.innerHTML = `<span>มีข้อมูลที่ยังไม่บันทึก</span><span class="grow"></span><button class="btn sm" onclick="hideDiscard()">กลับไปกรอกต่อ</button><button class="btn sm danger" onclick="closeModal()">ทิ้งข้อมูล</button>`;
+  m.appendChild(d); d.scrollIntoView({block:'nearest'});
+}
+function hideDiscard() { $('#discard')?.remove(); }
 // ยืนยันแบบพิมพ์คำ (กันกดพลาด)
 function typedConfirm(title, text, word, yesLabel, onYes) {
   window.__onYes = onYes; window.__word = word;
@@ -736,8 +750,8 @@ function confirmModal(text, yesLabel, onYes, danger) {
   window.__onYes = onYes;
   modal('ยืนยัน', `<p style="margin:0">${text}</p>`, `<button class="btn ${danger ? 'danger' : 'pri'}" onclick="const f=window.__onYes;closeModal();f()">${yesLabel}</button>`);
 }
-function closeModal() { $('#ov')?.remove(); $('#sheet')?.remove(); $('#sheetov')?.remove(); }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+function closeModal() { MODAL_DIRTY = false; $('#ov')?.remove(); $('#sheet')?.remove(); $('#sheetov')?.remove(); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { if ($('#sheet')) closeModal(); else tryCloseModal(); } });
 function exportCSV(name, rows) {
   const csv = rows.map(r => r.map(v => '"' + String(v ?? '').replace(/"/g, '""') + '"').join(',')).join('\n');
   window.__csv = csv;
@@ -756,8 +770,11 @@ function route() {
   return {parts:path.split('/'), q:Object.fromEntries(new URLSearchParams(qs || ''))};
 }
 const go = h => { location.hash = h; };
-let LAST = '#/dashboard';
-window.addEventListener('hashchange', () => { closeModal(); render(); });
+let LAST = '#/dashboard', CUR_HASH = location.hash;
+window.addEventListener('hashchange', () => {
+  if ($('#ov') && MODAL_DIRTY) { history.replaceState(null, '', CUR_HASH || '#/dashboard'); askDiscard(); return; }   // กำลังกรอกข้อมูล: ไม่ออกจากหน้า ถามก่อน
+  closeModal(); CUR_HASH = location.hash; render();
+});
 
 function shell(active, title, sub, actions, body) {
   const waiting = DB.orders.filter(o => o.status === 'waiting').length;
