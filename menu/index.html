@@ -202,19 +202,23 @@ function updatedText() {
   return 'อัปเดตล่าสุด ' + (ymd(d) === ymd(new Date()) ? hm : `${d.getDate()} ${TH_M[d.getMonth()]} ${hm}`);
 }
 const methods = p => Object.values(p.methods || {}).filter(x => x && x.price > 0);
-const MT = {WEIGHT:'⚖️ ชั่งกิโล', SIZE_GRADE_WEIGHT:'📏 ตามไซซ์', PIECE_ACTUAL_WEIGHT:'🐟 ขายเป็นตัว · คิดตามน้ำหนักจริง'};
-const priceHtml = p => { const ms = methods(p); if (!ms.length) return p.retail_price > 0 ? `${baht(p.retail_price)}<small> / kg</small>` : '<small>สอบถามราคา</small>';
-  const lo = Math.min(...ms.map(x => x.price)), hi = Math.max(...ms.map(x => x.price)); return `${baht(lo)}${hi > lo ? '–' + baht(hi).slice(1) : ''}<small> / kg</small>`; };
+const MT = {WEIGHT:'⚖️ ตามน้ำหนัก (ชั่งจริง)', SIZE_GRADE_WEIGHT:'📏 ตามไซซ์', PIECE_ACTUAL_WEIGHT:'🐟 ขายเป็นตัว · คิดตามน้ำหนักจริง'};
+const grades = p => Object.values(p.grades || {}).filter(Boolean);
+const gradeHtml = p => grades(p).length > 1 ? `ไซซ์ในสต็อก: ${grades(p).map(esc).join(' · ')}` : '';
+const allPrices = p => methods(p).flatMap(x => { const ss = Object.values(x.sizes || {}); return ss.length ? ss.map(s => s.price) : [x.price]; }).filter(v => v > 0);
+const priceHtml = p => { const ps = allPrices(p); if (!ps.length) return p.retail_price > 0 ? `${baht(p.retail_price)}<small> / kg</small>` : '<small>สอบถามราคา</small>';
+  const lo = Math.min(...ps), hi = Math.max(...ps); return `${baht(lo)}${hi > lo ? '–' + baht(hi).slice(1) : ''}<small> / kg</small>`; };
 const fmtG = g => g >= 1000 ? (g / 1000).toLocaleString('th-TH', {maximumFractionDigits:3}) + ' kg' : g + ' g';
 const pieces = p => Object.values(p.pieces || {}).filter(x => x && x.g > 0);
 const MSG_PIECE = (p, x) => `สนใจ ${title(p)}\nขายเป็นตัว · ตัว ${fmtG(x.g)} (${baht(x.price)})\nต้องการสั่งซื้อค่ะ`;
+const MSG_SIZE = (p, mm, s) => `สนใจ ${p.name}\nไซซ์ ${s.grade} (${baht(s.price)}/kg)\nต้องการสั่งซื้อ/สอบถามรายละเอียดค่ะ`;
 const MSG_METHOD = (p, mm) => `สนใจ ${title(p)}\nแบบ: ${mm.name} (${baht(mm.price)}/kg)\nต้องการสั่งซื้อ/สอบถามรายละเอียดค่ะ`;
 const avgHtml = p => p.avg_piece_g > 0 ? `น้ำหนักประมาณ ${p.avg_piece_g >= 1000 ? (p.avg_piece_g / 1000).toLocaleString('th-TH', {maximumFractionDigits:2}) + ' kg' : p.avg_piece_g + ' g'}/ตัว` : '';
 function card(p) {
   return `<a class="card ${p.status === 'soldout' ? 'out' : ''}" href="?p=${encodeURIComponent(p.slug)}" data-nav aria-label="${esc(title(p))} ดูรายละเอียด">
     <div class="ph">${CAT_EMOJI[p.category] || '🐟'}${p.image_v ? `<img alt="${esc(p.name)}" data-slug="${esc(p.slug)}" data-size="thumb" data-v="${p.image_v}">` : ''}<span class="st ${esc(p.status)}">${ST[p.status] || ''}</span>${isNew(p) ? '<span class="new">เข้าใหม่</span>' : ''}</div>
-    <div class="b"><div class="nm">${esc(p.name)}</div>${p.size ? `<div class="sz">${esc(p.size)}</div>` : ''}${avgHtml(p) ? `<div class="sz">${avgHtml(p)}</div>` : ''}
-      ${methods(p).length > 1 ? `<div class="sz">${methods(p).length} วิธีขาย</div>` : ''}<div class="pr num">${priceHtml(p)}</div>${pieces(p).length ? `<div class="pcs-line">🐟 เลือกตัวได้ ${pieces(p).length} ตัว</div>` : ''}<div class="more-i">ดูรายละเอียด ›</div></div></a>`;
+    <div class="b"><div class="nm">${esc(p.name)}</div>${p.size ? `<div class="sz">${esc(p.size)}</div>` : ''}${gradeHtml(p) ? `<div class="sz">${gradeHtml(p)}</div>` : ''}${avgHtml(p) ? `<div class="sz">${avgHtml(p)}</div>` : ''}
+      ${(() => { const n = methods(p).reduce((s, x) => s + (Object.values(x.sizes || {}).length || 1), 0); const ss = methods(p).flatMap(x => Object.values(x.sizes || {})); return ss.length > 1 ? `<div class="sz">${ss.length} ไซซ์${n > ss.length ? ' · ' + (n - ss.length) + ' วิธีขายอื่น' : ''}</div>` : n > 1 ? `<div class="sz">${n} วิธีขาย</div>` : ''; })()}<div class="pr num">${priceHtml(p)}</div>${pieces(p).length ? `<div class="pcs-line">🐟 เลือกตัวได้ ${pieces(p).length} ตัว</div>` : ''}<div class="more-i">ดูรายละเอียด ›</div></div></a>`;
 }
 function topbar(back, q = '') {
   const m = CAT.meta;
@@ -252,7 +256,7 @@ function vList(c) {
 }
 const norm = s => String(s || '').toLowerCase().replace(/[\s\-–—]+/g, '');
 function vSearch(q) {
-  const n = norm(q), L = CAT.list.filter(p => [p.name, p.size, p.category].some(x => norm(x).includes(n)));
+  const n = norm(q), L = CAT.list.filter(p => [p.name, p.size, p.category, ...grades(p)].some(x => norm(x).includes(n)));
   return `${topbar(true, q)}<main class="wrap"><h2 class="sec" style="margin-top:16px">ผลการค้นหา “${esc(q)}” <span style="font-weight:400;color:var(--ink-3);font-size:14px">${L.length} รายการ</span></h2>${chips('')}${grid(L)}</main>`;
 }
 function vDetail(slug) {
@@ -267,12 +271,15 @@ function vDetail(slug) {
   return `${topbar(true)}<main class="wrap d">
     <div class="dimg" id="dimg">${CAT_EMOJI[p.category] || '🐟'}</div>
     <div>
-      <h1>${esc(p.name)}</h1>${p.size ? `<div class="sz">${esc(p.size)}</div>` : ''}
+      <h1>${esc(p.name)}</h1>${p.size ? `<div class="sz">${esc(p.size)}</div>` : ''}${gradeHtml(p) ? `<div class="sz">${gradeHtml(p)}</div>` : ''}
       <span class="pill ${esc(p.status)}">${ST[p.status] || ''}</span>
-      <div class="box"><h3>วิธีขาย · ราคาปลีก</h3><div class="pieces">${(methods(p).length ? methods(p) : [{name:'ราคาปลีก', type:'WEIGHT', price:p.retail_price}]).map(mm => { const u = lineUrl(MSG_METHOD(p, mm));
+      <div class="box"><h3>วิธีขาย · ราคาปลีก</h3><div class="pieces">${(methods(p).length ? methods(p) : [{name:'ราคาปลีก', type:'WEIGHT', price:p.retail_price}]).map(mm => { const ss = Object.values(mm.sizes || {});
+        if (ss.length) return `<div class="small" style="color:var(--ink-2);font-weight:600;margin-top:4px">${MT[mm.type] || ''} ${mm.name && mm.name !== 'ตามไซซ์' ? '· ' + esc(mm.name) : ''}</div>${ss.map(s => { const u = lineUrl(MSG_SIZE(p, mm, s));
+          return `<div class="pc-row" style="flex-wrap:wrap"><span style="flex:1;min-width:130px"><b>${esc(s.grade)}</b><div class="small"><span class="pill ${esc(s.status)}" style="margin:2px 0 0;font-size:11.5px;padding:1px 8px">${ST[s.status] || ''}</span></div></span><span class="pp num" style="flex:none">${baht(s.price)}<small style="color:var(--ink-3);font-weight:400"> / kg</small></span>${u && s.status !== 'soldout' ? `<a class="linebtn" href="${esc(u)}" target="_blank" rel="noopener">${LINE_SVG} สั่งไซซ์นี้</a>` : ''}</div>`; }).join('')}`;
+        const u = lineUrl(MSG_METHOD(p, mm));
         return `<div class="pc-row" style="flex-wrap:wrap"><span style="flex:1;min-width:150px"><b>${esc(mm.name)}</b><div class="small" style="color:var(--ink-3)">${MT[mm.type] || ''}</div></span><span class="pp num" style="flex:none">${baht(mm.price)}<small style="color:var(--ink-3);font-weight:400"> / kg</small></span>${u ? `<a class="linebtn" href="${esc(u)}" target="_blank" rel="noopener">${LINE_SVG} สั่งแบบนี้</a>` : ''}</div>`; }).join('')}</div>
         ${avgHtml(p) ? `<div class="avgw" style="margin-top:8px">${avgHtml(p)}</div>` : ''}<div class="note" style="text-align:left;margin-top:8px">ราคาคิดตามน้ำหนักจริง · ซื้อจำนวนมาก? กด “🏷️ ขอราคาส่ง” เพื่อสอบถามทาง LINE</div></div>
-      ${pieces(p).length ? `<div class="box"><h3>🐟 เลือกตัวได้ (${pieces(p).length} ตัว)</h3><p class="note" style="text-align:left;margin:0 0 10px">ชั่งไว้แล้ว · ราคาต่อตัว = น้ำหนักจริง × ราคาขายเป็นตัว</p><div class="pieces">${pieces(p).map(x => { const u = lineUrl(MSG_PIECE(p, x)); return `<div class="pc-row"><span class="w num">${fmtG(x.g)}</span><span class="pp num">${baht(x.price)}</span>${u ? `<a class="linebtn" href="${esc(u)}" target="_blank" rel="noopener">${LINE_SVG} สั่งตัวนี้</a>` : ''}</div>`; }).join('')}</div></div>` : ''}
+      ${pieces(p).length ? `<div class="box"><h3>🐟 เลือกตัวได้ (${pieces(p).length} ตัว)</h3><p class="note" style="text-align:left;margin:0 0 10px">ชั่งไว้แล้ว · ราคาต่อตัว = น้ำหนักจริง × ราคาขายเป็นตัว</p><div class="pieces">${pieces(p).map(x => { const u = lineUrl(MSG_PIECE(p, x)); return `<div class="pc-row"><span class="w num">${fmtG(x.g)}${x.grade && grades(p).length > 1 ? `<div style="font-weight:400;font-size:12px;color:var(--ink-3)">${esc(x.grade)}</div>` : ''}</span><span class="pp num">${baht(x.price)}</span>${u ? `<a class="linebtn" href="${esc(u)}" target="_blank" rel="noopener">${LINE_SVG} สั่งตัวนี้</a>` : ''}</div>`; }).join('')}</div></div>` : ''}
       ${p.description ? `<div class="box"><h3>รายละเอียด</h3><div class="pre">${esc(p.description)}</div></div>` : ''}
       ${p.highlights.length ? `<div class="box"><h3>จุดเด่น</h3><ul class="hl">${p.highlights.map(h => `<li>${esc(h)}</li>`).join('')}</ul></div>` : ''}
       ${m.packing_text ? `<div class="box"><h3>📦 การแพ็ก</h3><div class="pre">${esc(m.packing_text)}</div></div>` : ''}

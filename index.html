@@ -371,6 +371,7 @@ ol.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;c
 .pimg img{width:100%;height:100%;object-fit:cover}
 .pchip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line-2);border-radius:10px;padding:6px 10px;background:var(--surface);cursor:pointer;min-height:38px;font-size:13.5px}
 .pchip.on{border-color:var(--blue);background:var(--blue-soft)}
+.srow{border:1px dashed var(--line-2);border-radius:10px;padding:8px 10px;background:var(--surface)}
 .mrow{border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--surface-2)}
 .oline{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-md);padding:12px 12px 10px;position:relative;display:flex;flex-direction:column;gap:10px}
 .oline .r{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;padding-right:30px}
@@ -902,7 +903,7 @@ function selBar() {
 
 /* ---------- Order form (create / edit) ---------- */
 let F = null;
-const newLine = () => ({product_id:'', method_id:'', kg:1, pmode:'pick', pcs:1, piece_ids:[], actual_kg:'', actual_pcs:'', override:false, selling_price:null});
+const newLine = () => ({product_id:'', method_id:'', size_id:'', kg:1, pmode:'pick', pcs:1, piece_ids:[], actual_kg:'', actual_pcs:'', override:false, selling_price:null});
 function newDraft() {
   const s = DB.settings;
   return {id:null, customer_id:'', order_date:today(), items:[newLine()], channel:'LINE', boxes:1, shipping_fee:s.shipping.fee, discount:0, packaging_cost:s.cost.packaging, other_cost:s.cost.other, notes:''};
@@ -910,7 +911,7 @@ function newDraft() {
 function draftFromOrder(o) {
   return {id:o.id, order_number:o.order_number, customer_id:o.customer_id, order_date:o.order_date, channel:o.channel || 'LINE', boxes:boxesOf(o), shipping_fee:o.shipping_fee, discount:o.discount, packaging_cost:o.packaging_cost, other_cost:o.other_cost, notes:o.notes,
     items:o.items.map(i => { const piece = i.method_type === 'PIECE_ACTUAL_WEIGHT', ids = [...(i.piece_ids || [])];
-      return {product_id:i.product_id, method_id:i.method_id, kg:piece ? 1 : +i.quantity, pmode:ids.length ? 'pick' : 'count', pcs:i.req_pcs || i.actual_pcs || 1, piece_ids:ids,
+      return {product_id:i.product_id, method_id:i.method_id, size_id:i.size_id || '', kg:piece ? 1 : +i.quantity, pmode:ids.length ? 'pick' : 'count', pcs:i.req_pcs || i.actual_pcs || 1, piece_ids:ids,
         actual_kg:piece && !ids.length && i.weighed && i.actual_g ? i.actual_g / 1000 : '', actual_pcs:!piece && i.weighed ? (i.actual_pcs || '') : '',
         override:i.selling_price !== i.original_price, selling_price:i.selling_price, snap:{...i}}; })};
 }
@@ -924,12 +925,13 @@ function lineCalc(l) {
     if ((l.pmode || 'pick') === 'pick') { pick = true; const ix = pieceIndex(p.id); pcs = (l.piece_ids || []).length; g = (l.piece_ids || []).reduce((s, id) => s + (ix[id]?.g || 0), 0); }
     else { pcs = Math.max(0, Math.round(+l.pcs || 0)); const ag = toG(l.actual_kg); if (ag > 0) g = ag; else { g = Math.round(pcs * countAvgG(p.id)); weighed = false; } }
   } else { g = toG(l.kg); if (piece) { pcs = Math.max(0, Math.round(+l.actual_pcs || 0)); weighed = pcs > 0; } }
-  const kg = g / 1000, keep = l.snap && l.snap.product_id === l.product_id && l.snap.method_id === m.id;   // รายการเดิม: ราคา/ต้นทุน snapshot
-  const t = keep ? {tier:l.snap.price_tier, price:l.snap.original_price} : tierForM(m, kg);
+  const s = sizesOf(m).length ? (sizesOf(m).find(x => x.id === l.size_id) || sizesOf(m)[0]) : null;   // ตามไซซ์: ราคา + ราคาส่งของไซซ์นั้น
+  const kg = g / 1000, keep = l.snap && l.snap.product_id === l.product_id && l.snap.method_id === m.id && (l.snap.size_id || '') === (s ? s.id : '');   // รายการเดิม: ราคา/ต้นทุน snapshot
+  const t = keep ? {tier:l.snap.price_tier, price:l.snap.original_price} : tierForM(s || m, kg);
   const cost = keep ? l.snap.cost_per_unit : (+p.cost_per_unit || 0);
   const price = l.override && l.selling_price != null ? +l.selling_price : t.price;
   const rev = priceOfG(g, price), c = priceOfG(g, cost);
-  return {p, m, g, kg, pcs, weighed, pick, tier:t.tier, orig:t.price, price, cost, rev, c, profit:rev - c};
+  return {p, m, s, grade:s ? s.grade : '', g, kg, pcs, weighed, pick, tier:t.tier, orig:t.price, price, cost, rev, c, profit:rev - c};
 }
 function vOrderForm(existing) {
   if (!F || (existing && F.id !== existing.id) || (!existing && F.id)) F = existing ? draftFromOrder(existing) : newDraft();
@@ -968,8 +970,8 @@ function vOrderForm(existing) {
   return shell('orders', F.id ? 'แก้ไข ' + F.order_number : 'สร้างออเดอร์', F.id ? 'เลขออเดอร์คงเดิม · ราคาและต้นทุนของรายการเดิมคงเป็นค่า ณ วันที่สร้าง' : 'เลือกลูกค้า เลือกสินค้าและวิธีขาย — ระบบคำนวณราคาให้ · เลขออเดอร์สร้างอัตโนมัติเมื่อบันทึก', '', body);
 }
 function setLineProduct(i, pid) { const l = F.items[i], p = P(pid); l.product_id = pid; l.override = false; l.piece_ids = []; l.snap = null;
-  if (p) { const m = methodsOf(p)[0]; l.method_id = m ? m.id : ''; l.pmode = defaultPmode(p); } refreshForm(true); }
-function setLineMethod(i, mid) { const l = F.items[i], p = P(l.product_id); l.method_id = mid; l.override = false; l.piece_ids = []; if (p) l.pmode = defaultPmode(p); refreshForm(true); }
+  if (p) { const m = methodsOf(p)[0]; l.method_id = m ? m.id : ''; l.size_id = m && sizesOf(m)[0] ? sizesOf(m)[0].id : ''; l.pmode = defaultPmode(p); } refreshForm(true); }
+function setLineMethod(i, v) { const l = F.items[i], p = P(l.product_id), [mid, sid] = String(v).split('|'); l.method_id = mid; l.size_id = sid || ''; l.override = false; l.piece_ids = []; if (p) l.pmode = defaultPmode(p); refreshForm(true); }
 function togglePiece(i, id, on) { const l = F.items[i]; const s = new Set(l.piece_ids || []); on ? s.add(id) : s.delete(id); l.piece_ids = [...s]; refreshForm(true); }
 function refreshForm(itemsToo) {
   const ci = $('#custinfo');
@@ -979,7 +981,9 @@ function refreshForm(itemsToo) {
       const lc = lineCalc(l), p = lc ? lc.p : P(l.product_id), m = lc ? lc.m : null, piece = p && tracksPcs(p);
       const prodSel = `<label class="f">สินค้า<select class="in" onchange="setLineProduct(${i},this.value)"><option value="">— เลือกสินค้า —</option>
           ${CATS.map(cat => `<optgroup label="${cat}">${DB.products.filter(x => x.category === cat && (x.active || x.id === l.product_id)).map(x => `<option value="${x.id}" ${l.product_id === x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</optgroup>`).join('')}</select></label>`;
-      const methSel = p ? `<label class="f">วิธีขาย<select class="in" onchange="setLineMethod(${i},this.value)">${methodsOf(p).map(x => `<option value="${x.id}" ${m && m.id === x.id ? 'selected' : ''}>${esc(x.name)} · ฿${n2(x.price)}/kg</option>`).join('')}</select></label>` : '';
+      const methSel = p ? `<label class="f">วิธีขาย / ไซซ์<select class="in" onchange="setLineMethod(${i},this.value)">${methodsOf(p).map(x => sizesOf(x).length
+          ? `<optgroup label="${esc(x.name)}">${sizesOf(x).map(z => `<option value="${x.id}|${z.id}" ${m && m.id === x.id && lc.s && lc.s.id === z.id ? 'selected' : ''}>${esc(z.grade)} · ฿${n2(z.price)}/kg</option>`).join('')}</optgroup>`
+          : `<option value="${x.id}|" ${m && m.id === x.id ? 'selected' : ''}>${esc(x.name)} · ฿${n2(x.price)}/kg</option>`).join('')}</select></label>` : '';
       let ctl = '';
       if (m && m.type === 'PIECE_ACTUAL_WEIGHT') {
         const ps = availPieces(p.id, l.piece_ids), pick = (l.pmode || 'pick') === 'pick';
@@ -1006,20 +1010,21 @@ function refreshForm(itemsToo) {
 const lineTotalHtml = lc => `${lc.weighed ? '' : '≈ '}${baht(lc.rev)}<div class="small muted" style="font-weight:400">${fmtW(lc.g)}${lc.pcs ? ' · ' + lc.pcs + ' ตัว' : ''}</div>`;
 /* ตรวจสต็อกก่อนบันทึก: น้ำหนัก (ตามช่องทาง) · ตัว + น้ำหนัก (รายตัวที่เลือก / ของรวม) */
 function stockNeedCheck(draft) {
-  const ch = draft.channel || 'LINE', needW = {}, needC = {}, out = {};
+  const ch = draft.channel || 'LINE', needW = {}, needC = {}, needG = {}, out = {};
   draft.items.forEach(l => { const lc = lineCalc(l); if (!lc || !stockOn(lc.p) || !(lc.g > 0)) return;
-    if (!tracksPcs(lc.p)) needW[lc.p.id] = (needW[lc.p.id] || 0) + lc.g;
-    else if (!lc.pick) { const n = needC[lc.p.id] = needC[lc.p.id] || {g:0, pc:0}; n.g += lc.g; n.pc += lc.pcs; } });
+    if (!tracksPcs(lc.p)) { needW[lc.p.id] = (needW[lc.p.id] || 0) + lc.g; if (lc.grade) { const k = lc.p.id + '|' + lc.grade; needG[k] = (needG[k] || 0) + lc.g; } }
+    else if (!lc.pick) { const k = lc.p.id + '|' + (lc.grade || ''), n = needC[k] = needC[k] || {g:0, pc:0}; n.g += lc.g; n.pc += lc.pcs; } });
+  Object.entries(needG).forEach(([k, q]) => { const [pid, grade] = k.split('|'), can = gradeAvail(pid, grade, draft.id); out['g-' + k] = {q, can, ok:q <= can, p:P(pid), txt:`ไซซ์ ${grade} ต้องการ ${fmtW(q)} ขายได้ ${fmtW(can)}`}; });
   Object.entries(needW).forEach(([pid, q]) => { const st = stockOf(pid);
     const own = draft.id ? DB.stock_reservations.filter(r => r.order_id === draft.id && r.product_id === pid && r.status === 'active' && r.channel === ch).reduce((s, r) => s + r.qty, 0) : 0;
     const ord = draft.id ? DB.orders.find(o => o.id === draft.id) : null;
     const sold = ord && ['shipped', 'delivered'].includes(ord.status) ? Object.values(orderLotNet(ord.id, pid)).reduce((s, v) => s + v.g, 0) : 0;
     const can = ord && ['shipped', 'delivered'].includes(ord.status) ? Math.max(0, st.avail) + sold : st.sell[ch] + own;
     out[pid] = {q, can, ok:q <= can, p:st.p, txt:`ต้องการ ${fmtW(q)} ขายได้ ${fmtW(can)}`}; });
-  Object.entries(needC).forEach(([pid, n]) => { const cs = countSellable(pid, draft.id);
+  Object.entries(needC).forEach(([k, n]) => { const [pid, grade] = k.split('|'), cs = countSellable(pid, draft.id, grade || undefined);
     const ord = draft.id ? DB.orders.find(o => o.id === draft.id) : null; if (ord && ['shipped', 'delivered'].includes(ord.status)) { const nt = Object.values(orderLotNet(ord.id, pid)); cs.g += nt.reduce((s, v) => s + v.g, 0); cs.pc += nt.reduce((s, v) => s + v.pc, 0); }
     const ok = n.pc <= cs.pc && (n.g <= cs.g || n.pc === 0 ? n.g <= cs.g : true);
-    out[pid] = {q:n.g, can:cs.g, ok, p:P(pid), txt:`ต้องการ ${n.pc ? n.pc + ' ตัว ' : ''}${fmtW(n.g)} · ของรวมขายได้ ${cs.pc} ตัว ${fmtW(cs.g)}`}; });
+    out['c-' + k] = {q:n.g, can:cs.g, ok, p:P(pid), txt:`${grade ? 'ไซซ์ ' + grade + ' ' : ''}ต้องการ ${n.pc ? n.pc + ' ตัว ' : ''}${fmtW(n.g)} · ขายได้ ${cs.pc} ตัว ${fmtW(cs.g)}`}; });
   draft.items.forEach(l => { const lc = lineCalc(l); if (!lc || !lc.pick) return; const st = Object.fromEntries(pieceStates(lc.p.id).map(x => [x.id, x]));
     if (!(l.piece_ids || []).length) out['pick-' + lc.p.id] = {ok:false, p:lc.p, txt:'เลือกปลาอย่างน้อย 1 ตัว'};
     (l.piece_ids || []).forEach(id => { const x = st[id]; const mine = x && ((x.state === 'reserved' && x.order_id === draft.id) || (x.state === 'sold' && draft.id && DB.stock_movements.some(m => m.piece_id === id && m.order_id === draft.id)));
@@ -1029,10 +1034,11 @@ function stockNeedCheck(draft) {
 function metaLine(l, lc, i) {
   if (!lc) return '';
   const p = lc.p; let av = '';
-  if (stockOn(p)) { if (tracksPcs(p) && !lc.pick) { const cs = countSellable(p.id, F.id); av = `<span class="muted">ของรวมขายได้ ${cs.pc} ตัว · ${fmtW(cs.g)}</span>`; }
+  if (stockOn(p) && lc.grade && !tracksPcs(p)) { const can = gradeAvail(p.id, lc.grade, F.id); av = `<span style="color:${lc.g <= can ? 'var(--green)' : 'var(--red)'}">${lc.g <= can ? '✓' : '⚠'} ไซซ์ ${esc(lc.grade)} ขายได้ ${fmtW(can)}</span>`; }
+  else if (stockOn(p)) { if (tracksPcs(p) && !lc.pick) { const cs = countSellable(p.id, F.id, lc.grade || undefined); av = `<span class="muted">${lc.grade ? 'ไซซ์ ' + esc(lc.grade) + ' ' : 'ของรวม'}ขายได้ ${cs.pc} ตัว · ${fmtW(cs.g)}</span>`; }
     else if (!tracksPcs(p)) { const chk = stockNeedCheck({...F, items:[l]})[p.id]; if (chk) av = `<span style="color:${chk.ok ? 'var(--green)' : 'var(--red)'}">${chk.ok ? '✓' : '⚠'} ขายได้ (${F.channel || 'LINE'}) ${fmtW(chk.can)}</span>`; } }
   else av = '<span class="muted">ยังไม่ได้รับสินค้าเข้า (ไม่ติดตามสต็อก)</span>';
-  if (stockOn(p) && gradesInStock(p.id).length) av += `<span class="muted">ไซซ์ในสต็อก: ${gradesInStock(p.id).map(esc).join(', ')}</span>`;
+  if (stockOn(p) && !lc.grade && gradesInStock(p.id).length) av += `<span class="muted">ไซซ์ในสต็อก: ${gradesInStock(p.id).map(esc).join(', ')} (ตัด Lot เก่าสุดก่อน)</span>`;
   return `<span class="tag blue">ราคา ${lc.tier}</span>${l.override && lc.price !== lc.orig ? `<span class="tag or">แก้ราคาจาก ${baht(lc.orig)}/kg</span><button class="btn sm ghost" onclick="F.items[${i}].override=false;refreshForm(true)">ใช้ราคาตั้ง</button>` : ''}${lc.weighed ? '' : '<span class="tag or">≈ ประมาณการ · รอชั่งตอนแพ็ก</span>'}<span>ต้นทุน ${baht(lc.cost, 2)}/kg</span><span style="color:var(--blue)">กำไร ${baht(lc.profit)}</span>${av}`;
 }
 function refreshLine(i, typedPrice) {
@@ -1069,8 +1075,8 @@ async function saveOrder() {
   const bad = Object.values(stockNeedCheck({...F, items:lines})).filter(x => !x.ok);
   if (bad.length) return toast('สต็อกไม่พอ: ' + bad.map(x => `${x.p.name} ${x.txt}`).join(' · ') + ' · รับสินค้าเข้าหรือจัดสรร Stock ก่อน');
   const items = lines.map(l => { const lc = lineCalc(l), p = lc.p, m = lc.m, ix = pieceIndex(p.id), ids = lc.pick ? [...(l.piece_ids || [])] : [];
-    const it = {id:l.snap?.id || uid('I'), product_id:p.id, method_id:m.id, method_type:m.type, method_name:m.name,
-      product_name:p.name + ' · ' + m.name + (ids.length ? ' · ตัว ' + ids.map(id => fmtW(ix[id]?.g || 0)).join(', ') : ''),
+    const it = {id:l.snap?.id || uid('I'), product_id:p.id, method_id:m.id, method_type:m.type, method_name:m.name, ...(lc.s ? {size_id:lc.s.id, grade:lc.s.grade} : {}),
+      product_name:p.name + ' · ' + (lc.s ? lc.s.grade : m.name) + (ids.length ? ' · ตัว ' + ids.map(id => fmtW(ix[id]?.g || 0)).join(', ') : ''),
       category:p.category, unit:'kg', quantity:lc.kg, price_tier:lc.tier, original_price:lc.orig, selling_price:lc.price, cost_per_unit:lc.cost};
     if (tracksPcs(p)) Object.assign(it, {needs_weigh:true, weighed:lc.weighed, actual_g:lc.weighed ? lc.g : 0, actual_pcs:lc.weighed ? lc.pcs : 0,
       req_pcs:m.type === 'PIECE_ACTUAL_WEIGHT' && !lc.pick ? lc.pcs : 0, piece_ids:ids});
@@ -1256,7 +1262,7 @@ function vProducts(q) {
   const body = `<div class="stack"><div class="row"><div class="seg">${['all', ...CATS].map(c => `<button class="${cat === c ? 'on' : ''}" onclick="go('#/products?cat=${c}')">${c === 'all' ? 'ทั้งหมด' : c}</button>`).join('')}</div></div>
   ${!DB.products.length ? '<div class="card empty">ยังไม่มีสินค้า<br><button class="btn pri" style="margin-top:12px" onclick="productModal()">＋ เพิ่มสินค้าแรก</button></div>' : ''}<div class="plist">${ps.map(p => `<div class="card prod ${p.active ? '' : 'off'}" onclick="productModal('${p.id}')" tabindex="0" onkeydown="if(event.key==='Enter')productModal('${p.id}')">
     <div class="row" style="flex-wrap:nowrap"><div class="em">${CAT_EMOJI[p.category]}</div><div style="min-width:0"><b>${esc(p.name)}</b><div class="small muted">${gradesInStock(p.id).length ? 'ไซซ์ในสต็อก: ' + gradesInStock(p.id).map(esc).join(', ') : (stockOn(p) ? 'ไม่มีของ' : 'ยังไม่รับสินค้า')}${p.active ? '' : ' · ปิดขาย'}${p.show_on_catalog && p.active ? ' · <span style="color:var(--blue)">🛍 ในเมนู</span>' : ''}</div></div></div>
-    <div class="stack" style="gap:4px">${methodsOf(p).map(m => `<div class="row small" style="justify-content:space-between;flex-wrap:nowrap;gap:8px"><span>${esc(m.name)}</span><b class="num">฿${n2(m.price)}/kg</b></div>`).join('')}</div>
+    <div class="stack" style="gap:4px">${methodsOf(p).map(m => sizesOf(m).length ? `<div class="small muted" style="margin-top:2px">${esc(m.name)}</div>${sizesOf(m).map(s => `<div class="row small" style="justify-content:space-between;flex-wrap:nowrap;gap:8px;padding-left:10px"><span>${esc(s.grade)}</span><b class="num">฿${n2(s.price)}/kg</b></div>`).join('')}` : `<div class="row small" style="justify-content:space-between;flex-wrap:nowrap;gap:8px"><span>${esc(m.name)}</span><b class="num">฿${n2(m.price)}/kg</b></div>`).join('')}</div>
 
     <div class="row small"><span class="muted">ต้นทุน</span><b class="num">${baht(p.cost_per_unit, 2)}</b><span class="muted">· Yield</span><span class="num">${n2(p.yield_percent)}%</span><span class="grow"></span><span class="small muted">${STYPE[p.stock_type] || ''}</span></div>
   </div>`).join('')}</div></div>`;
@@ -1264,7 +1270,13 @@ function vProducts(q) {
 }
 /* ----- ฟอร์มสินค้า: 1 สินค้า มีได้หลายวิธีขาย ----- */
 let PM = [];
-const newMethod = (type = 'WEIGHT') => ({id:uid('M'), name:type === 'PIECE_ACTUAL_WEIGHT' ? 'ขายเป็นตัว' : 'ขายตามน้ำหนัก', type, price:'', price_5kg:'', price_10kg:'', price_20kg:'', show:true});
+const newSize = (price = '') => ({id:uid('Z'), grade:'', price, price_5kg:'', price_10kg:'', price_20kg:'', show:true});
+const defName = t => t === 'PIECE_ACTUAL_WEIGHT' ? 'ขายเป็นตัว' : t === 'SIZE_GRADE_WEIGHT' ? 'ตามไซซ์' : 'ตามน้ำหนัก';
+const newMethod = (type = 'SIZE_GRADE_WEIGHT') => ({id:uid('M'), name:defName(type), type, price:'', price_5kg:'', price_10kg:'', price_20kg:'', show:true, ...(type === 'SIZE_GRADE_WEIGHT' ? {sizes:[newSize()]} : {})});
+function setMethodType(k, t) { const m = PM[k]; if (!m.name || Object.values({a:'ขายเป็นตัว', b:'ตามไซซ์', c:'ตามน้ำหนัก', d:'ขายตามน้ำหนัก', e:'ชั่งกิโล'}).includes(m.name)) m.name = defName(t);
+  if (t === 'SIZE_GRADE_WEIGHT' && !sizesOf({type:t, sizes:m.sizes}).length) m.sizes = [newSize(m.price)];
+  if (m.type === 'SIZE_GRADE_WEIGHT' && t !== 'SIZE_GRADE_WEIGHT' && !(+m.price > 0)) m.price = (m.sizes || [])[0]?.price || '';
+  m.type = t; renderMethods(); }
 function productModal(id) {
   PIMG = null;
   const p = id ? P(id) : {name:'', category:'ปลา', size:'', unit:'kg', cost_per_unit:0, yield_percent:100, packaging_cost:0, active:true, notes:'', stock_type:'WEIGHT_ONLY', methods:[]};
@@ -1272,9 +1284,9 @@ function productModal(id) {
   const locked = id && DB.stock_lots.some(l => l.product_id === id);
   const f = (k, l, t = 'number', ph = '') => `<label class="f">${l}<input class="in ${t === 'number' ? 'num' : ''}" type="${t}" data-k="${k}" value="${esc(p[k] ?? '')}" placeholder="${ph}"></label>`;
   modal(id ? 'แก้ไขสินค้า' : 'เพิ่มสินค้า', `<div class="fgrid">${f('name', 'ชื่อสินค้า', 'text', 'เช่น ปลาจะละเม็ดดำ')}<label class="f">หมวด<select class="in" data-k="category">${CATS.map(c => `<option ${c === p.category ? 'selected' : ''}>${c}</option>`).join('')}</select></label>
-    <label class="f">นับสต็อกแบบ<select class="in" data-k="stock_type" ${locked ? 'disabled title="มี Lot แล้ว · ลบ Lot ทั้งหมดก่อนถ้าต้องการเปลี่ยน"' : ''} onchange="renderMethods()">${Object.entries(STYPE).map(([k, l]) => `<option value="${k}" ${(p.stock_type || 'WEIGHT_ONLY') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
-    <p class="small muted" style="margin:6px 0 0">ตั้งชื่อสินค้าอย่างเดียว เช่น "ปลาจะละเม็ดดำ" · ไซซ์ เช่น 3–4 ตัว/kg ใส่ตอนรับสินค้าเข้าแต่ละ Lot · วิธีขายคือ "ขายแบบไหน" ใช้สต็อกชุดเดียวกัน</p>
-    <div class="hd" style="margin:18px 0 8px"><h4 style="margin:0;font-size:14px">วิธีขาย (ราคาต่อ kg)</h4><div class="grow"></div><button class="btn sm" onclick="PM.push(newMethod());renderMethods()">＋ เพิ่มวิธีขาย</button></div>
+</div>
+    <p class="small muted" style="margin:6px 0 0">ตั้งชื่อสินค้าอย่างเดียว เช่น "กุ้งลายทะเล" · 1 สินค้ามีได้หลายวิธีขาย และวิธี "ตามไซซ์" มีได้หลายไซซ์ แต่ละไซซ์ราคาของตัวเอง · ทั้งหมดใช้สต็อกชุดเดียวกัน · ถ้ามีวิธี "ขายเป็นตัว" ระบบนับจำนวนตัวให้อัตโนมัติ</p>
+    <div class="hd" style="margin:18px 0 8px"><h4 style="margin:0;font-size:14px">วิธีขาย (ราคาต่อ kg)</h4><div class="grow"></div><button class="btn sm" onclick="PM.push(newMethod(PM.some(m=>m.type==='SIZE_GRADE_WEIGHT')?'WEIGHT':'SIZE_GRADE_WEIGHT'));renderMethods()">＋ เพิ่มวิธีขาย</button></div>
     <div id="methods" class="stack" style="gap:10px"></div>
     <h4 style="margin:16px 0 8px;font-size:14px">ต้นทุน</h4><div class="fgrid">${f('cost_per_unit', 'ต้นทุนเริ่มต้น / kg')}${f('yield_percent', 'Yield %')}</div>
     <label class="row small" style="margin-top:14px"><input type="checkbox" data-k="active" ${p.active ? 'checked' : ''}> เปิดขาย</label>
@@ -1284,28 +1296,45 @@ function productModal(id) {
   renderMethods();
 }
 function renderMethods() {
-  const el = $('#methods'); if (!el) return; const stEl = $('#ov [data-k=stock_type]'), piece = stEl && stEl.value === 'PIECE_BY_WEIGHT';
+  const el = $('#methods'); if (!el) return;
+  const ws = (o, path) => `<details class="small"><summary style="cursor:pointer;color:var(--ink-2)">ราคาส่ง${+o.price_5kg || +o.price_10kg || +o.price_20kg ? ' ✓' : ''}</summary>
+    <div class="fgrid" style="margin-top:8px">${['5', '10', '20'].map(t => `<label class="f">${t} kg ขึ้นไป<input class="in num" type="number" inputmode="decimal" min="0" value="${o['price_' + t + 'kg'] || ''}" oninput="${path}['price_${t}kg']=this.value"></label>`).join('')}</div></details>`;
   el.innerHTML = PM.map((m, k) => `<div class="mrow">
-    <div class="fgrid"><label class="f">ชื่อวิธีขาย<input class="in" value="${esc(m.name)}" placeholder="เช่น ขายตามน้ำหนัก, ขายเป็นตัว" oninput="PM[${k}].name=this.value"></label>
-      <label class="f">แบบ<select class="in" onchange="PM[${k}].type=this.value;if(!PM[${k}].name||['ชั่งกิโล','ขายเป็นตัว','ขายตามน้ำหนัก'].includes(PM[${k}].name))PM[${k}].name=this.value==='PIECE_ACTUAL_WEIGHT'?'ขายเป็นตัว':'ขายตามน้ำหนัก';renderMethods()">${Object.entries(METHOD_T).map(([t, l]) => `<option value="${t}" ${m.type === t ? 'selected' : ''} ${t === 'PIECE_ACTUAL_WEIGHT' && !piece ? 'disabled' : ''}>${l}</option>`).join('')}</select></label>
-      <label class="f">ราคาปลีก (฿/kg)<input class="in num" type="number" inputmode="decimal" min="0" value="${m.price}" oninput="PM[${k}].price=this.value"></label></div>
-    ${m.type === 'PIECE_ACTUAL_WEIGHT' && !piece ? '<p class="small" style="color:var(--red);margin:6px 0 0">ขายเป็นตัวต้องใช้ "นับสต็อกแบบ ตัว + น้ำหนัก"</p>' : ''}
-    <div class="row" style="margin-top:8px"><details class="small" style="flex:1"><summary style="cursor:pointer;color:var(--ink-2)">ราคาส่ง (หลังบ้านเท่านั้น)${+m.price_5kg || +m.price_10kg || +m.price_20kg ? ' ✓' : ''}</summary>
-      <div class="fgrid" style="margin-top:8px">${['5', '10', '20'].map(t => `<label class="f">${t} kg ขึ้นไป<input class="in num" type="number" inputmode="decimal" min="0" value="${m['price_' + t + 'kg'] || ''}" oninput="PM[${k}]['price_${t}kg']=this.value"></label>`).join('')}</div></details>
-      <label class="row small"><input type="checkbox" class="ck" ${m.show !== false ? 'checked' : ''} onchange="PM[${k}].show=this.checked"> แสดงในเมนู</label>
-      ${PM.length > 1 ? `<button class="btn sm ghost danger" onclick="PM.splice(${k},1);renderMethods()">ลบวิธีนี้</button>` : ''}</div></div>`).join('');
+    <div class="row" style="flex-wrap:nowrap;gap:8px;align-items:flex-end"><label class="f" style="flex:1">วิธีขาย<select class="in" onchange="setMethodType(${k},this.value)">${Object.entries(METHOD_T).map(([t, l]) => `<option value="${t}" ${m.type === t ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      <label class="f" style="flex:1">ชื่อที่แสดง<input class="in" value="${esc(m.name)}" oninput="PM[${k}].name=this.value"></label>
+      ${PM.length > 1 ? `<button class="btn sm ghost danger" title="ลบวิธีขายนี้" aria-label="ลบวิธีขายนี้" onclick="PM.splice(${k},1);renderMethods()">🗑</button>` : ''}</div>
+    ${m.type === 'SIZE_GRADE_WEIGHT' ? `<div class="stack" style="gap:8px;margin-top:10px">${sizesOf(m).map((s, j) => `<div class="srow">
+        <div class="row" style="flex-wrap:nowrap;gap:8px;align-items:flex-end"><label class="f" style="flex:1.3">ไซซ์<input class="in" value="${esc(s.grade)}" placeholder="เช่น 10–12 ตัว/kg" oninput="PM[${k}].sizes[${j}].grade=this.value"></label>
+          <label class="f" style="flex:1">ราคา ฿/kg<input class="in num" type="number" inputmode="decimal" min="0" value="${s.price}" oninput="PM[${k}].sizes[${j}].price=this.value"></label>
+          ${sizesOf(m).length > 1 ? `<button class="btn sm ghost danger" title="ลบไซซ์" aria-label="ลบไซซ์" onclick="PM[${k}].sizes.splice(${j},1);renderMethods()">✕</button>` : ''}</div>
+        <div class="row" style="margin-top:6px">${ws(s, `PM[${k}].sizes[${j}]`)}<label class="row small" style="margin-left:auto"><input type="checkbox" class="ck" ${s.show !== false ? 'checked' : ''} onchange="PM[${k}].sizes[${j}].show=this.checked"> แสดงในเมนู</label></div></div>`).join('')}
+      <button class="btn sm" style="align-self:flex-start" onclick="PM[${k}].sizes.push(newSize());renderMethods()">＋ เพิ่มไซซ์</button></div>`
+    : `<div class="row" style="margin-top:10px;align-items:flex-end"><label class="f" style="flex:0 1 200px">ราคา ฿/kg<input class="in num" type="number" inputmode="decimal" min="0" value="${m.price}" oninput="PM[${k}].price=this.value"></label>
+        <div style="flex:1;min-width:160px">${ws(m, `PM[${k}]`)}</div><label class="row small"><input type="checkbox" class="ck" ${m.show !== false ? 'checked' : ''} onchange="PM[${k}].show=this.checked"> แสดงในเมนู</label></div>`}
+  </div>`).join('');
 }
 async function saveProduct(id) {
   const v = {}; $$('#ov [data-k]').forEach(i => { if (i.disabled) return; v[i.dataset.k] = i.type === 'checkbox' ? i.checked : i.type === 'number' ? +i.value : i.value.trim(); });
   if (!v.name) return toast('ใส่ชื่อสินค้าก่อน');
-  const piece = (v.stock_type || (id && P(id).stock_type)) === 'PIECE_BY_WEIGHT';
-  // วิธีขาย: ตรวจและแปลงเป็นตัวเลข
-  const ms = PM.map(m => ({id:m.id || uid('M'), name:String(m.name || '').trim(), type:m.type, price:+m.price || 0, price_5kg:+m.price_5kg || 0, price_10kg:+m.price_10kg || 0, price_20kg:+m.price_20kg || 0, show:m.show !== false}));
+  const num = x => +x || 0;
+  const ms = PM.map(m => { const o = {id:m.id || uid('M'), name:String(m.name || '').trim() || defName(m.type), type:m.type, show:m.show !== false};
+    if (m.type === 'SIZE_GRADE_WEIGHT') { o.sizes = sizesOf(m).map(s => ({id:s.id || uid('Z'), grade:String(s.grade || '').trim(), price:num(s.price), price_5kg:num(s.price_5kg), price_10kg:num(s.price_10kg), price_20kg:num(s.price_20kg), show:s.show !== false}));
+      o.price = o.sizes.length ? Math.min(...o.sizes.map(s => s.price || Infinity)) : 0; o.price_5kg = o.price_10kg = o.price_20kg = 0; }
+    else Object.assign(o, {price:num(m.price), price_5kg:num(m.price_5kg), price_10kg:num(m.price_10kg), price_20kg:num(m.price_20kg)});
+    return o; });
   if (!ms.length) return toast('เพิ่มวิธีขายอย่างน้อย 1 วิธี');
-  if (ms.some(m => !m.name)) return toast('ตั้งชื่อวิธีขายให้ครบ เช่น "ขายตามน้ำหนัก" หรือ "ขายเป็นตัว"');
-  if (ms.some(m => !(m.price > 0))) return toast('ใส่ราคาปลีก (฿/kg) ของทุกวิธีขาย');
-  if (!piece && ms.some(m => m.type === 'PIECE_ACTUAL_WEIGHT')) return toast('วิธี "ขายเป็นตัว" ต้องใช้การนับสต็อกแบบ ตัว + น้ำหนัก');
-  v.methods = ms; v.unit = 'kg'; v.retail_price = ms[0].price; v.price_5kg = ms[0].price_5kg; v.price_10kg = ms[0].price_10kg; v.price_20kg = ms[0].price_20kg;   // field เดิม = วิธีขายแรก (ให้ส่วนอื่นของระบบใช้ต่อได้)
+  for (const m of ms) { if (m.type === 'SIZE_GRADE_WEIGHT') {
+      if (!m.sizes.length) return toast('วิธี "ตามไซซ์" ต้องมีอย่างน้อย 1 ไซซ์');
+      if (m.sizes.some(s => !s.grade)) return toast('ใส่ชื่อไซซ์ให้ครบ เช่น 10–12 ตัว/kg');
+      if (m.sizes.some(s => !(s.price > 0))) return toast('ใส่ราคาของทุกไซซ์ (฿/kg)');
+      if (new Set(m.sizes.map(s => s.grade)).size !== m.sizes.length) return toast('มีไซซ์ซ้ำกัน');
+    } else if (!(m.price > 0)) return toast(`ใส่ราคา ฿/kg ของวิธี "${m.name}"`); }
+  // นับจำนวนตัวอัตโนมัติ: มีวิธี "ขายเป็นตัว" หรือเคยนับตัวและมี Lot อยู่แล้ว
+  const hasLots = id && DB.stock_lots.some(l => l.product_id === id);
+  v.stock_type = ms.some(m => m.type === 'PIECE_ACTUAL_WEIGHT') || (hasLots && P(id).stock_type === 'PIECE_BY_WEIGHT') ? 'PIECE_BY_WEIGHT' : 'WEIGHT_ONLY';
+  const piece = v.stock_type === 'PIECE_BY_WEIGHT';
+  const first = ms[0];
+  v.methods = ms; v.unit = 'kg'; v.retail_price = first.price; v.price_5kg = first.price_5kg || 0; v.price_10kg = first.price_10kg || 0; v.price_20kg = first.price_20kg || 0;   // field เดิม = วิธีขายแรก
   // หน่วยในฟอร์ม → หน่วยฐาน (กรัม / ตัว)
   v.catalog_low_threshold = v.catalog_low_threshold_ui > 0 ? (piece ? Math.round(v.catalog_low_threshold_ui) : toG(v.catalog_low_threshold_ui)) : 0; delete v.catalog_low_threshold_ui;
   if ('catalog_min_order_ui' in v) { v.catalog_min_order = v.catalog_min_order_ui > 0 ? toG(v.catalog_min_order_ui) : 0; delete v.catalog_min_order_ui; }
@@ -1993,6 +2022,7 @@ const allocRec = pid => { let r = DB.stock_allocations.find(a => a.id === pid); 
 function mv(o) {
   const m = {id:uid('S'), at:new Date().toISOString(), product_id:o.product_id, lot_id:o.lot_id || null, type:o.type, grams:Math.round(o.grams || 0), pcs:Math.round(o.pcs || 0), reason:o.reason || '', order_id:o.order_id || null, by:USER?.email || ''};
   if (o.piece_id) m.piece_id = o.piece_id;
+  if (o.bucket && o.bucket !== '*') m.bucket = o.bucket;          // ไซซ์ที่ขาย (ตัดเฉพาะ Lot ไซซ์นั้น) · ไม่มี = Lot ไหนก็ได้
   DB.stock_movements.push(m); return m;
 }
 function stockOf(pid) {
@@ -2018,7 +2048,7 @@ function reduceAlloc(pid, ch, q) { const r = DB.stock_allocations.find(a => a.id
 
 /* ----- Order ↔ Stock (เรียกอัตโนมัติจาก save() เมื่อออเดอร์เปลี่ยน) ----- */
 function orderStockSig(o, deleted) {   // รายการรุ่นเก่าให้ลายเซ็นเท่าเดิม (ไม่ซิงก์ย้อนหลัง) · field ใหม่ต่อท้ายเมื่อมีเท่านั้น
-  const sig = i => { const a = [i.product_id, +i.quantity, i.weight_g || 0]; if ((i.piece_ids || []).length) a.push([...i.piece_ids].sort()); if ('weighed' in i) a.push([!!i.weighed, i.actual_g || 0, i.actual_pcs || 0, i.req_pcs || 0]); return a; };
+  const sig = i => { const a = [i.product_id, +i.quantity, i.weight_g || 0]; if ((i.piece_ids || []).length) a.push([...i.piece_ids].sort()); if ('weighed' in i) a.push([!!i.weighed, i.actual_g || 0, i.actual_pcs || 0, i.req_pcs || 0]); if (i.grade) a.push('g:' + i.grade); return a; };
   return JSON.stringify([deleted ? 'X' : o.status, o.channel || 'LINE', (o.items || []).map(sig)]);
 }
 function desiredFor(o, deleted) {
@@ -2038,38 +2068,31 @@ function syncOrderStock(o, deleted) {
   pids.forEach(pid => {
     const p = P(pid); if (!p) return;
     if (isPBW(p)) { syncPBW(o, p, mode, ch, why, warn); clampAlloc(pid); return; }
-    const piece = isPiece(p), n = need[pid] || {q:0, g:0, gKnown:true};
-    // 1) การจอง
-    const wantR = mode === 'reserve' ? n.q : 0;
+    // สินค้าน้ำหนัก: แยกตาม "ไซซ์" ที่ขาย (bucket) · ตามไซซ์ = เฉพาะ Lot ไซซ์นั้น · ตามน้ำหนัก ('*') = Lot ไหนก็ได้ (เก่าสุดก่อน)
+    const its = (o.items || []).filter(i => i.product_id === pid), wantB = {};
+    if (mode !== 'none') its.forEach(i => { const b = i.grade || '*'; wantB[b] = (wantB[b] || 0) + Math.round((+i.quantity || 0) * 1000); });
+    const rB = mode === 'reserve' ? wantB : {}, rQ = Object.values(rB).reduce((s, v) => s + v, 0);
+    const byG = o2 => Object.fromEntries(Object.keys(o2).sort().filter(k => o2[k]).map(k => [k, {g:o2[k]}]));
     const act = DB.stock_reservations.filter(r => r.order_id === o.id && r.product_id === pid && r.status === 'active');
-    const curR = act.reduce((s, r) => s + r.qty, 0);
-    if (curR !== wantR || (wantR && act.some(r => r.channel !== ch))) {
+    const curKey = act.length === 1 ? JSON.stringify([act[0].qty, act[0].by_grade || {}, act[0].channel]) : act.length ? 'multi' : JSON.stringify([0, {}, ch]);
+    if (curKey !== JSON.stringify([rQ, byG(rB), rQ ? ch : ch])) {
       act.forEach(r => { r.status = mode === 'sold' ? 'committed' : 'released'; r.updated_at = now;
-        if (mode !== 'sold') mv({type:'RELEASE_RESERVATION', product_id:pid, grams:piece ? 0 : r.qty, pcs:piece ? r.qty : 0, order_id:o.id, reason:why}); });
-      if (wantR) { DB.stock_reservations.push({id:uid('V'), product_id:pid, order_id:o.id, channel:ch, qty:wantR, status:'active', created_at:now, updated_at:now});
-        mv({type:'RESERVE', product_id:pid, grams:piece ? 0 : wantR, pcs:piece ? wantR : 0, order_id:o.id, reason:`${why} (${ch})`}); }
+        if (mode !== 'sold') mv({type:'RELEASE_RESERVATION', product_id:pid, grams:r.qty, pcs:0, order_id:o.id, reason:why}); });
+      if (rQ) { DB.stock_reservations.push({id:uid('V'), product_id:pid, order_id:o.id, channel:ch, qty:rQ, by_grade:byG(rB), status:'active', created_at:now, updated_at:now});
+        mv({type:'RESERVE', product_id:pid, grams:rQ, pcs:0, order_id:o.id, reason:`${why} (${ch})${Object.keys(rB).filter(b => b !== '*').map(b => ' · ' + b).join('')}`}); }
     }
-    // 2) จำนวนที่ขาย (หน่วยฐาน) — FIFO
-    const net = orderLotNet(o.id, pid); const curQ = Object.values(net).reduce((s, v) => s + (piece ? v.pc : v.g), 0);
-    let dq = (mode === 'sold' ? n.q : 0) - curQ;
-    if (dq > 0) { const st = stockOf(pid);
-      for (const l of st.lots) { if (dq <= 0) break; const have = piece ? st.rem[l.id].pc : st.rem[l.id].g; if (have <= 0) continue; const take = Math.min(have, dq);
-        mv({type:'SALE', product_id:pid, lot_id:l.id, grams:piece ? 0 : -take, pcs:piece ? -take : 0, order_id:o.id, reason:`${why} (${ch})`}); reduceAlloc(pid, ch, take); dq -= take; }
-      if (dq > 0) warn.push(`${p.name}: สต็อกไม่พอ ตัดไม่ได้อีก ${fmtQ(p, dq)}`);
-    } else if (dq < 0) { let back = -dq; const lotOrder = DB.stock_lots.filter(l => net[l.id]).sort(fifo).reverse();
-      for (const l of lotOrder) { if (back <= 0) break; const v = net[l.id], sold = piece ? v.pc : v.g; if (sold <= 0) continue; const give = Math.min(sold, back);
-        mv({type:'RETURN', product_id:pid, lot_id:l.id, grams:piece ? (v.pc ? Math.round(v.g * give / v.pc) : 0) : give, pcs:piece ? give : 0, order_id:o.id, reason:why}); back -= give; }
-    }
-    // 3) สินค้านับตัว: น้ำหนักจริงที่ขาย (ไม่เดาน้ำหนัก — ถ้ายังไม่กรอก ตัดเฉพาะจำนวนตัว และรอใส่น้ำหนักจริง)
-    if (piece) { const n2 = orderLotNet(o.id, pid); const ent = Object.entries(n2).filter(([, v]) => v.pc > 0);
-      const curG = Object.values(n2).reduce((s, v) => s + v.g, 0), totPc = ent.reduce((s, [, v]) => s + v.pc, 0);
-      const wantG = mode === 'sold' ? (n.gKnown ? n.g : curG) : 0; let dg = wantG - curG;
-      if (dg !== 0 && totPc > 0) { const st = stockOf(pid);
-        ent.forEach(([lid, v], k) => { let share = k === ent.length - 1 ? dg : Math.round((wantG - curG) * v.pc / totPc);
-          if (share > 0) share = Math.min(share, Math.max(0, st.rem[lid].g)); if (!share) return;
-          mv({type:share > 0 ? 'SALE' : 'RETURN', product_id:pid, lot_id:lid, grams:-share, pcs:0, order_id:o.id, reason:`${why} · น้ำหนักจริง`}); dg -= share; });
-      } else if (dg < 0) { Object.entries(n2).forEach(([lid, v]) => { if (v.g > 0) mv({type:'RETURN', product_id:pid, lot_id:lid, grams:v.g, pcs:0, order_id:o.id, reason:why}); }); }
-    }
+    const curB = {}, netLB = {};
+    DB.stock_movements.forEach(m => { if (m.order_id === o.id && m.product_id === pid && !m.piece_id && (m.type === 'SALE' || m.type === 'RETURN')) { const b = m.bucket || '*'; curB[b] = (curB[b] || 0) - m.grams; netLB[b + '|' + m.lot_id] = (netLB[b + '|' + m.lot_id] || 0) - m.grams; } });
+    const soldW = mode === 'sold' ? wantB : {}, st = stockOf(pid), rem = Object.fromEntries(st.lots.map(l => [l.id, st.rem[l.id].g]));
+    [...new Set([...Object.keys(soldW), ...Object.keys(curB)])].forEach(b => {
+      let dq = (soldW[b] || 0) - (curB[b] || 0);
+      const lots = st.lots.filter(l => b === '*' || (l.grade || '').trim() === b);
+      if (dq > 0) { for (const l of lots) { if (dq <= 0) break; const take = Math.min(rem[l.id], dq); if (take <= 0) continue;
+          mv({type:'SALE', product_id:pid, lot_id:l.id, grams:-take, pcs:0, order_id:o.id, bucket:b, reason:`${why} (${ch})${b !== '*' ? ' · ' + b : ''}`}); reduceAlloc(pid, ch, take); rem[l.id] -= take; dq -= take; }
+        if (dq > 0) warn.push(`${p.name}${b !== '*' ? ' ' + b : ''}: สต็อกไม่พอ ตัดไม่ได้อีก ${fmtW(dq)}`); }
+      else if (dq < 0) { let back = -dq; for (const l of lots.slice().reverse()) { if (back <= 0) break; const sold = netLB[b + '|' + l.id] || 0; if (sold <= 0) continue; const give = Math.min(sold, back);
+          mv({type:'RETURN', product_id:pid, lot_id:l.id, grams:give, pcs:0, order_id:o.id, bucket:b, reason:why}); rem[l.id] += give; back -= give; } }
+    });
     clampAlloc(pid);
   });
   if (warn.length) setTimeout(() => toast(warn.join(' · ')), 50);
@@ -2099,10 +2122,9 @@ function renderReceive() {
   modal('รับสินค้าเข้า', `<div class="fgrid">
     <label class="f" style="grid-column:1/-1">สินค้า<select class="in" onchange="const q=P(this.value);RV.pid=this.value;RV.type=q.stock_type||'WEIGHT_ONLY';RV.grade=gradesUsed(q.id)[0]||q.default_grade||'';renderReceive()">${DB.products.map(x => `<option value="${x.id}" ${x.id === RV.pid ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
     <label class="f">วันที่รับ<input type="date" class="in" value="${RV.date}" oninput="RV.date=this.value"></label>
-    <label class="f">Size / Grade ของ Lot นี้ (ไม่บังคับ)<input class="in" list="gradelist" value="${esc(RV.grade)}" placeholder="เช่น 3–4 ตัว/kg" oninput="RV.grade=this.value"><datalist id="gradelist">${[...new Set([...gradesUsed(p.id), p.default_grade].filter(Boolean))].map(g => `<option value="${esc(g)}">`).join('')}</datalist></label>
-    <label class="f">วิธีนับสต็อก<select class="in" ${locked ? 'disabled title="สินค้านี้มี Lot แล้ว เปลี่ยนวิธีนับได้ที่หน้า Products ถ้ายังไม่มีการเคลื่อนไหว"' : ''} onchange="RV.type=this.value;renderReceive()">${Object.entries(STYPE).map(([k, l]) => `<option value="${k}" ${RV.type === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+    <label class="f">Size / Grade ของ Lot นี้ (ไม่บังคับ)<input class="in" list="gradelist" value="${esc(RV.grade)}" placeholder="เช่น 3–4 ตัว/kg" oninput="RV.grade=this.value"><datalist id="gradelist">${[...new Set([...methodsOf(p).flatMap(m => sizesOf(m).map(s => s.grade)), ...gradesUsed(p.id), p.default_grade].filter(Boolean))].map(g => `<option value="${esc(g)}">`).join('')}</datalist></label>
   </div>
-  ${methodsOf(p).length ? `<p class="small muted" style="margin:8px 0 0">วิธีขาย: ${methodsOf(p).map(m => `<b>${esc(m.name)}</b> ฿${n2(m.price)}/kg`).join(' · ')}</p>` : ''}
+  ${methodsOf(p).length ? `<p class="small muted" style="margin:8px 0 0">วิธีขาย: ${methodsOf(p).map(m => sizesOf(m).length ? sizesOf(m).map(s => `<b>${esc(s.grade)}</b> ฿${n2(s.price)}`).join(', ') : `<b>${esc(m.name)}</b> ฿${n2(m.price)}/kg`).join(' · ')}${tracksPcs(p) ? ' · นับจำนวนตัวด้วย' : ''}</p>` : ''}
   <div style="margin-top:14px">${piece ? `<div class="seg" style="margin-bottom:10px"><button class="${RV.lotmode !== 'pieces' ? 'on' : ''}" onclick="RV.lotmode='count';renderReceive()">น้ำหนักรวม</button><button class="${RV.lotmode === 'pieces' ? 'on' : ''}" onclick="RV.lotmode='pieces';renderReceive()">ชั่งรายตัว</button></div>
     ${RV.lotmode === 'pieces' ? `<label class="f">น้ำหนักแต่ละตัว (กรัม) · คั่นด้วยเว้นวรรคหรือขึ้นบรรทัดใหม่<textarea class="in num" placeholder="555&#10;658&#10;620" oninput="RV.weights=this.value;rvSum()">${esc(RV.weights)}</textarea></label><p class="small muted" style="margin:6px 0 0">ไม่บังคับ · ชั่งรายตัวเมื่ออยากให้ลูกค้าเลือกตัวได้ (เมนูแสดงน้ำหนักและราคาของแต่ละตัว)</p>`
       : `<div class="fgrid"><label class="f">จำนวน (ตัว)<input class="in num" type="number" inputmode="numeric" min="0" value="${RV.pcs}" oninput="RV.pcs=this.value;rvSum()"></label><label class="f">น้ำหนักรวม (kg)<input class="in num" type="number" inputmode="decimal" step="0.001" min="0" value="${RV.kg}" oninput="RV.kg=this.value;rvSum()"></label></div>`}`
@@ -2126,7 +2148,7 @@ function saveReceive() {
   const c = rvCalc(), k = rvCost(c), p = P(RV.pid);
   if (c.each && !c.ws.length) return toast('ใส่น้ำหนักแต่ละตัว'); if (!(c.g > 0)) return toast('ใส่น้ำหนักก่อน'); if (c.piece && !(c.pcs > 0)) return toast('ใส่จำนวนตัวก่อน');
   const now = new Date().toISOString();
-  if (!DB.stock_lots.some(l => l.product_id === p.id)) { p.stock_type = RV.type; p.unit = 'kg'; }
+  p.unit = 'kg';
   p.stock_enabled = true; p.updated_at = now;
   const lot = {id:uid('L'), lot_code:lotCode(RV.date), product_id:p.id, received_at:RV.date, supplier:RV.supplier.trim(), grade:String(RV.grade || '').trim(), received_g:c.g, received_pcs:c.pcs || null, piece_weights:c.ws, cost_total:k.total, cost_per_kg:Math.round(k.perkg * 100) / 100, notes:RV.note.trim(), created_at:now, created_by:USER?.email || ''};
   if (isPBW(p)) { lot.mode = c.each ? 'pieces' : 'count'; if (c.each) lot.pieces = c.ws.map(g => ({id:uid('F'), g:Math.round(g)})); }
@@ -2275,17 +2297,27 @@ function catalogStatus(p) {
   const q = stockOf(p.id).sell.LINE, t = catThresholds(p);            // น้ำหนัก: กรัมที่ขายได้ทาง LINE
   return q < t.min ? 'soldout' : q <= t.low ? 'low' : 'available';
 }
+function sizeStatus(p, grade) {   // สถานะของไซซ์ = ของที่ขายได้ใน Lot ไซซ์นั้น (กรัม) · เกณฑ์เดียวกับสินค้าน้ำหนัก
+  if ((p.catalog_status || 'auto') !== 'auto') return p.catalog_status;
+  if (!stockOn(p)) return 'ask';
+  const q = tracksPcs(p) ? countSellable(p.id, null, grade).g : gradeAvail(p.id, grade), t = catThresholds(p);
+  return q < t.min ? 'soldout' : q <= t.low ? 'low' : 'available';
+}
 function lastReceived(pid) { let d = null; DB.stock_lots.forEach(l => { if (l.product_id === pid && (!d || l.received_at > d)) d = l.received_at; }); return d; }
 /* allowlist: สร้าง object ใหม่ทีละ field — ไม่มีการคัดลอก product ทั้งก้อน · ราคาเปิดเฉพาะ retail_price */
 function catalogProduct(p, i) {
   const img = /^rtdb:/.test(p.image_url || '') ? +((p.image_url.split('v=')[1]) || 1) : 0;
   const hl = String(p.catalog_highlights || '').split('\n').map(s => s.trim()).filter(Boolean).slice(0, 8);
-  const ms = methodsOf(p).filter(m => m.show !== false && +m.price > 0);
+  const ms = methodsOf(p).filter(m => m.show !== false && (sizesOf(m).length ? sizesOf(m).some(s => s.show !== false && +s.price > 0) : +m.price > 0));
+  const shownSizes = m => sizesOf(m).filter(s => s.show !== false && +s.price > 0);
+  const allPrices = ms.flatMap(m => sizesOf(m).length ? shownSizes(m).map(s => +s.price) : [+m.price]);
   const grades = gradesInStock(p.id);
   const o = {slug:slugOf(p), name:String(p.name || ''), size:grades.length === 1 ? grades[0] : '', grades, category:String(p.category || ''), cat_slug:CAT_SLUG[p.category] || '',
-    unit:'kg', retail_price:ms.length ? Math.min(...ms.map(m => +m.price)) : 0, description:String(p.catalog_description || '').slice(0, 600), highlights:hl,
+    unit:'kg', retail_price:allPrices.length ? Math.min(...allPrices) : 0, description:String(p.catalog_description || '').slice(0, 600), highlights:hl,
     featured:!!p.catalog_featured, status:catalogStatus(p), last_received:lastReceived(p.id) || '', image_v:img, sort:i,
-    methods:ms.map(m => ({name:String(m.name || ''), type:m.type, price:Math.round(+m.price * 100) / 100}))};   // ราคาปลีกของแต่ละวิธีขายเท่านั้น (ไม่มีราคาส่ง)
+    methods:ms.map(m => sizesOf(m).length   // ราคาปลีกของแต่ละวิธีขาย / แต่ละไซซ์เท่านั้น (ไม่มีราคาส่ง) · ไซซ์มีสถานะของตัวเอง
+      ? {name:String(m.name || ''), type:m.type, price:Math.min(...shownSizes(m).map(s => +s.price)), sizes:shownSizes(m).map(s => ({grade:String(s.grade), price:Math.round(+s.price * 100) / 100, status:sizeStatus(p, s.grade)}))}
+      : {name:String(m.name || ''), type:m.type, price:Math.round(+m.price * 100) / 100})};
   const pm = ms.find(m => m.type === 'PIECE_ACTUAL_WEIGHT');
   if (pm && tracksPcs(p) && stockOn(p))   // ปลารายตัวที่ชั่งไว้และยังว่าง: น้ำหนัก + ราคา (ไม่มีรหัส Lot/ต้นทุน)
     o.pieces = pieceStates(p.id).filter(x => x.state === 'available').sort((a, b) => b.g - a.g).slice(0, 40).map(x => { const gr = (DB.stock_lots.find(l => l.id === x.lot_id) || {}).grade; return gr ? {g:x.g, price:priceOfG(x.g, pm.price), grade:gr} : {g:x.g, price:priceOfG(x.g, pm.price)}; });
@@ -2386,7 +2418,9 @@ function menuCard() {
    - Stock Lot : ของที่รับเข้าจริง (ไม่ผูกกับวิธีขาย) · สินค้านับตัว: lot.mode 'count' (ตัว+น้ำหนักรวม) หรือ 'pieces' (ชั่งรายตัว)
    - Order Item: วิธีขาย + น้ำหนักจริง (กรัม) + จำนวนตัวจริง · ถ้ายังไม่รู้น้ำหนักจริง = "รอชั่งตอนแพ็ก" (ยังไม่ตัดสต็อก/ยังไม่ส่ง QR)
    ========================================================= */
-const METHOD_T = {WEIGHT:'⚖️ ขายตามน้ำหนัก', PIECE_ACTUAL_WEIGHT:'🐟 ขายเป็นตัว (คิดตามน้ำหนักจริง)'};
+const METHOD_T = {SIZE_GRADE_WEIGHT:'📏 ตามไซซ์', WEIGHT:'⚖️ ตามน้ำหนัก', PIECE_ACTUAL_WEIGHT:'🐟 ขายเป็นตัว (คิดตามน้ำหนักจริง)'};
+const sizesOf = m => m && m.type === 'SIZE_GRADE_WEIGHT' ? (Array.isArray(m.sizes) ? m.sizes : []) : [];
+const hasPieceMethod = p => methodsOf(p).some(m => m.type === 'PIECE_ACTUAL_WEIGHT');
 const GRADE_RE = /ตัว\s*\/\s*(kg|กก|โล|กิโล)|^\s*\d+\s*[–-]\s*\d+/i;            // ข้อความที่เป็นไซซ์ เช่น "3–4 ตัว/kg"
 /* ไซซ์/เกรด = ข้อมูลของ Stock Lot (ไม่ใช่ของสินค้า) · ไซซ์ที่ยังมีของ เรียงตาม Lot ที่รับก่อน */
 function gradesInStock(pid) {   // เฉพาะ Lot ที่ยังมีของขายได้ (ปลารายตัวที่ถูกจอง/ขายแล้วไม่นับ)
@@ -2413,16 +2447,21 @@ function migrateModel(d) {
   [...d.products, ...d.trash_products].forEach(p => {
     const old = p.stock_type || 'WEIGHT_ONLY';
     if (!Array.isArray(p.methods) || !p.methods.length) {
-      const type = (old === 'PIECE_AND_WEIGHT' || old === 'PIECE_BY_WEIGHT') ? 'PIECE_ACTUAL_WEIGHT' : 'WEIGHT';
-      p.methods = [{id:'M1', name:type === 'PIECE_ACTUAL_WEIGHT' ? 'ขายเป็นตัว' : 'ขายตามน้ำหนัก', type,
+      const type = (old === 'PIECE_AND_WEIGHT' || old === 'PIECE_BY_WEIGHT') ? 'PIECE_ACTUAL_WEIGHT' : old === 'SIZE_GRADE_WEIGHT' ? 'SIZE_GRADE_WEIGHT' : 'WEIGHT';
+      p.methods = [{id:'M1', name:type === 'PIECE_ACTUAL_WEIGHT' ? 'ขายเป็นตัว' : type === 'SIZE_GRADE_WEIGHT' ? 'ตามไซซ์' : 'ตามน้ำหนัก', type,
         price:+p.retail_price || 0, price_5kg:+p.price_5kg || 0, price_10kg:+p.price_10kg || 0, price_20kg:+p.price_20kg || 0, show:true}];
       fixed = true;
     } else p.methods = Object.values(p.methods);
-    p.methods.forEach(m => { if (m.type === 'SIZE_GRADE_WEIGHT') { m.type = 'WEIGHT'; if (!m.name || m.name === p.size || GRADE_RE.test(m.name) || m.name === 'ตามไซซ์') m.name = 'ขายตามน้ำหนัก'; fixed = true; } });
+    p.methods.forEach(m => { if (m.type !== 'SIZE_GRADE_WEIGHT') return;
+      if (!Array.isArray(m.sizes) || !m.sizes.length) {   // วิธีขายตามไซซ์รุ่นเก่า (1 ราคา) → ไซซ์ 1 รายการ
+        const grade = GRADE_RE.test(m.name || '') ? m.name : (p.size || p.default_grade || m.name || 'ไซซ์เดิม');
+        m.sizes = [{id:m.id + '-Z1', grade:String(grade).trim(), price:+m.price || 0, price_5kg:+m.price_5kg || 0, price_10kg:+m.price_10kg || 0, price_20kg:+m.price_20kg || 0, show:true}];
+        if (!m.name || GRADE_RE.test(m.name) || m.name === grade) m.name = 'ตามไซซ์'; fixed = true;
+      } else m.sizes = Object.values(m.sizes); });
     if ((p.size || '').trim()) {   // ไซซ์ที่เคยใส่ไว้กับสินค้า → ย้ายไปเป็นไซซ์ของ Lot เดิม และเป็นค่าแนะนำตอนรับเข้าครั้งถัดไป
       d.stock_lots.forEach(l => { if (l.product_id === p.id && !l.grade) l.grade = p.size.trim(); });
       p.default_grade = p.size.trim(); p.size = ''; fixed = true; }
-    const st = (old === 'PIECE_AND_WEIGHT' || old === 'PIECE_BY_WEIGHT') ? 'PIECE_BY_WEIGHT' : 'WEIGHT_ONLY';
+    const st = (old === 'PIECE_AND_WEIGHT' || old === 'PIECE_BY_WEIGHT' || p.methods.some(m => m.type === 'PIECE_ACTUAL_WEIGHT')) ? 'PIECE_BY_WEIGHT' : 'WEIGHT_ONLY';   // นับตัวอัตโนมัติเมื่อมีวิธี "ขายเป็นตัว"
     if (p.stock_type !== st || p.unit !== 'kg') { p.stock_type = st; p.unit = 'kg'; fixed = true; }
   });
   const pieceProd = new Set(d.products.filter(p => p.stock_type === 'PIECE_BY_WEIGHT').map(p => p.id));
@@ -2450,10 +2489,20 @@ function freeByLot(pid) {
   st.lots.forEach(l => { const t = intact[l.id] || {g:0, pc:0}; out[l.id] = {g:Math.max(0, st.rem[l.id].g - t.g), pc:Math.max(0, st.rem[l.id].pc - t.pc)}; });
   return out;
 }
-function countSellable(pid, exceptOrder) {
-  const f = Object.values(freeByLot(pid)).reduce((s, v) => ({g:s.g + v.g, pc:s.pc + v.pc}), {g:0, pc:0});
-  DB.stock_reservations.forEach(r => { if (r.product_id === pid && r.status === 'active' && r.order_id !== exceptOrder) { f.g -= (r.count_g || 0); f.pc -= (r.count_pcs || 0); } });
+function countSellable(pid, exceptOrder, grade) {   // grade: เฉพาะ Lot ไซซ์นั้น (ไม่ส่ง = ทุก Lot)
+  const fl = freeByLot(pid), lots = DB.stock_lots.filter(l => l.product_id === pid && (!grade || (l.grade || '').trim() === grade));
+  const f = lots.reduce((s, l) => ({g:s.g + (fl[l.id] || {g:0}).g, pc:s.pc + (fl[l.id] || {pc:0}).pc}), {g:0, pc:0});
+  DB.stock_reservations.forEach(r => { if (r.product_id !== pid || r.status !== 'active' || r.order_id === exceptOrder) return;
+    if (grade) { const x = (r.by_grade || {})[grade]; if (x) { f.g -= x.g || 0; f.pc -= x.pc || 0; } } else { f.g -= (r.count_g || 0); f.pc -= (r.count_pcs || 0); } });
+  if (grade) { const all = countSellable(pid, exceptOrder); f.g = Math.min(f.g, all.g); f.pc = Math.min(f.pc, all.pc); }
   return {g:Math.max(0, f.g), pc:Math.max(0, f.pc)};
+}
+/* สินค้าน้ำหนัก: ขายได้ของไซซ์นี้ = คงเหลือของ Lot ไซซ์นี้ − ที่ออเดอร์อื่นจองไซซ์นี้ไว้ (ไม่เกินยอดขายได้ทั้งหมด) */
+function gradeAvail(pid, grade, exceptOrder) {
+  const st = stockOf(pid); let g = st.lots.filter(l => (l.grade || '').trim() === grade).reduce((s, l) => s + Math.max(0, st.rem[l.id].g), 0);
+  DB.stock_reservations.forEach(r => { if (r.product_id === pid && r.status === 'active' && r.order_id !== exceptOrder) g -= (((r.by_grade || {})[grade]) || {}).g || 0; });
+  const own = exceptOrder ? DB.stock_reservations.filter(r => r.product_id === pid && r.status === 'active' && r.order_id === exceptOrder).reduce((s, r) => s + r.qty, 0) : 0;
+  return Math.max(0, Math.min(g, st.avail + own));
 }
 function countAvgG(pid) { const f = Object.values(freeByLot(pid)).reduce((s, v) => ({g:s.g + v.g, pc:s.pc + v.pc}), {g:0, pc:0}); if (f.pc > 0) return f.g / f.pc;
   const st = stockOf(pid); return st.pc > 0 ? st.g / st.pc : 0; }
@@ -2463,7 +2512,7 @@ function weighPending() { const out = []; DB.orders.forEach(o => { if (o.status 
 const pendingWeights = weighPending;
 
 /* ----- Stock sync สำหรับสินค้านับตัว (ปลารายตัว + ของรวม) ----- */
-function itemCount(i) { const w = !!i.weighed || !i.needs_weigh; return {g:w ? Math.round(+i.actual_g || (+i.quantity || 0) * 1000) : Math.round((+i.quantity || 0) * 1000), pc:w ? (+i.actual_pcs || 0) : (+i.req_pcs || 0), weighed:w}; }
+function itemCount(i) { const w = !!i.weighed || !i.needs_weigh; return {g:w ? Math.round(+i.actual_g || (+i.quantity || 0) * 1000) : Math.round((+i.quantity || 0) * 1000), pc:w ? (+i.actual_pcs || 0) : (+i.req_pcs || 0), weighed:w, b:i.grade || '*'}; }
 function syncPBW(o, p, mode, ch, why, warn) {
   const pid = p.id, now = new Date().toISOString(), items = (o.items || []).filter(i => i.product_id === pid), ix = pieceIndex(pid);
   const pieceIds = mode === 'none' ? [] : [...new Set(items.flatMap(i => i.piece_ids || []))];
@@ -2472,14 +2521,16 @@ function syncPBW(o, p, mode, ch, why, warn) {
   const rIds = mode === 'reserve' ? pieceIds : [];
   const rCnt = mode === 'none' ? [] : mode === 'reserve' ? cnt : cnt.filter(c => !c.weighed);
   const rG = rCnt.reduce((s, c) => s + c.g, 0), rPc = rCnt.reduce((s, c) => s + c.pc, 0);
+  const rBy = {}; rCnt.forEach(c => { const t = rBy[c.b] = rBy[c.b] || {g:0, pc:0}; t.g += c.g; t.pc += c.pc; });
+  const rByS = Object.fromEntries(Object.keys(rBy).sort().map(k => [k, rBy[k]]));
   const act = DB.stock_reservations.filter(r => r.order_id === o.id && r.product_id === pid && r.status === 'active');
-  const key = (ids, g, pc, c) => JSON.stringify([[...ids].sort(), g, pc, c]);
-  const same = act.length === 1 ? key(act[0].piece_ids || [], act[0].count_g || 0, act[0].count_pcs || 0, act[0].channel) === key(rIds, rG, rPc, ch) : (!act.length && !rIds.length && !rG && !rPc);
+  const key = (ids, g, pc, c, by) => JSON.stringify([[...ids].sort(), g, pc, c, by]);
+  const same = act.length === 1 ? key(act[0].piece_ids || [], act[0].count_g || 0, act[0].count_pcs || 0, act[0].channel, act[0].by_grade || {}) === key(rIds, rG, rPc, ch, rG || rPc ? rByS : {}) : (!act.length && !rIds.length && !rG && !rPc);
   if (!same) {
     act.forEach(r => { r.status = mode === 'sold' ? 'committed' : 'released'; r.updated_at = now;
       if (mode !== 'sold') mv({type:'RELEASE_RESERVATION', product_id:pid, grams:r.qty, pcs:(r.piece_ids || []).length + (r.count_pcs || 0), order_id:o.id, reason:why}); });
     if (rIds.length || rG || rPc) { const q = rIds.reduce((s, id) => s + (ix[id]?.g || 0), 0) + rG;
-      DB.stock_reservations.push({id:uid('V'), product_id:pid, order_id:o.id, channel:ch, qty:q, piece_ids:rIds, count_g:rG, count_pcs:rPc, status:'active', created_at:now, updated_at:now});
+      DB.stock_reservations.push({id:uid('V'), product_id:pid, order_id:o.id, channel:ch, qty:q, piece_ids:rIds, count_g:rG, count_pcs:rPc, by_grade:rG || rPc ? rByS : {}, status:'active', created_at:now, updated_at:now});
       mv({type:'RESERVE', product_id:pid, grams:q, pcs:rIds.length + rPc, order_id:o.id, reason:`${why} (${ch})${rIds.length ? ' · เลือกตัว ' + rIds.length + ' ตัว' : ''}${rPc ? ' · ' + rPc + ' ตัว' : ''}${rG ? ' · ≈' + fmtW(rG) : ''}`}); }
   }
   // ขายปลาที่เลือกตัว: ตัดตรงตัว
@@ -2492,25 +2543,27 @@ function syncPBW(o, p, mode, ch, why, warn) {
     mv({type:'SALE', product_id:pid, lot_id:pc.lot_id, piece_id:id, grams:-pc.g, pcs:-1, order_id:o.id, reason:`${why} (${ch}) · ตัว ${fmtW(pc.g)}`}); reduceAlloc(pid, ch, pc.g); });
   Object.entries(soldHere).forEach(([id, n]) => { if (n > 0 && !sellIds.includes(id)) { const pc = ix[id];
     mv({type:'RETURN', product_id:pid, lot_id:pc ? pc.lot_id : null, piece_id:id, grams:pc ? pc.g : 0, pcs:1, order_id:o.id, reason:why}); } });
-  // ขายแบบไม่ระบุตัว (ชั่งแล้ว): ตัดน้ำหนักจริง + จำนวนตัวจริง แบบ FIFO จากของรวม
-  const net = {}; DB.stock_movements.forEach(m => { if (m.order_id === o.id && m.product_id === pid && !m.piece_id && (m.type === 'SALE' || m.type === 'RETURN')) { const n = net[m.lot_id] = net[m.lot_id] || {g:0, pc:0}; n.g -= m.grams; n.pc -= m.pcs; } });
-  const cur = Object.values(net).reduce((s, v) => ({g:s.g + v.g, pc:s.pc + v.pc}), {g:0, pc:0});
-  const want = mode === 'sold' ? cnt.filter(c => c.weighed).reduce((s, c) => ({g:s.g + c.g, pc:s.pc + c.pc}), {g:0, pc:0}) : {g:0, pc:0};
-  let dg = want.g - cur.g, dpc = want.pc - cur.pc;
-  const lots = DB.stock_lots.filter(l => l.product_id === pid).sort(fifo);
-  if (dg > 0 || dpc > 0) { const free = freeByLot(pid);
-    const take = (l, pcN, gN) => { if (pcN <= 0 && gN <= 0) return; mv({type:'SALE', product_id:pid, lot_id:l.id, grams:-gN, pcs:-pcN, order_id:o.id, reason:`${why} (${ch})`}); reduceAlloc(pid, ch, gN); free[l.id].g -= gN; free[l.id].pc -= pcN; };
+  // ขายแบบไม่ระบุตัว (ชั่งแล้ว): ตัดน้ำหนักจริง + จำนวนตัวจริง แบบ FIFO จากของรวม · แยกตามไซซ์ที่ขาย (ตามไซซ์ = เฉพาะ Lot ไซซ์นั้น)
+  const curB = {}, netLB = {};
+  DB.stock_movements.forEach(m => { if (m.order_id === o.id && m.product_id === pid && !m.piece_id && (m.type === 'SALE' || m.type === 'RETURN')) { const b = m.bucket || '*', k = b + '|' + m.lot_id;
+    const c = curB[b] = curB[b] || {g:0, pc:0}; c.g -= m.grams; c.pc -= m.pcs; const n = netLB[k] = netLB[k] || {g:0, pc:0}; n.g -= m.grams; n.pc -= m.pcs; } });
+  const wantB = {}; if (mode === 'sold') cnt.filter(c => c.weighed).forEach(c => { const t = wantB[c.b] = wantB[c.b] || {g:0, pc:0}; t.g += c.g; t.pc += c.pc; });
+  const allLots = DB.stock_lots.filter(l => l.product_id === pid).sort(fifo), free = freeByLot(pid);
+  [...new Set([...Object.keys(wantB), ...Object.keys(curB)])].forEach(b => {
+    const lots = allLots.filter(l => b === '*' || (l.grade || '').trim() === b), w = wantB[b] || {g:0, pc:0}, cu = curB[b] || {g:0, pc:0};
+    let dg = w.g - cu.g, dpc = w.pc - cu.pc;
+    const take = (l, pcN, gN) => { if (pcN <= 0 && gN <= 0) return; mv({type:'SALE', product_id:pid, lot_id:l.id, grams:-gN, pcs:-pcN, order_id:o.id, bucket:b, reason:`${why} (${ch})${b !== '*' ? ' · ' + b : ''}`}); reduceAlloc(pid, ch, gN); free[l.id].g -= gN; free[l.id].pc -= pcN; };
     if (dpc > 0) { let needPc = dpc, needG = Math.max(0, dg);
       for (const l of lots) { if (needPc <= 0) break; const f = free[l.id]; if (f.pc <= 0) continue; const n = Math.min(f.pc, needPc);
         const g = needPc === n ? Math.min(needG, f.g) : Math.min(f.g, Math.round(needG * n / needPc)); take(l, n, g); needPc -= n; needG -= g; }
-      if (needPc > 0) warn.push(`${p.name}: จำนวนตัวในสต็อกไม่พอ ขาดอีก ${needPc} ตัว`);
+      if (needPc > 0) warn.push(`${p.name}${b !== '*' ? ' ' + b : ''}: จำนวนตัวในสต็อกไม่พอ ขาดอีก ${needPc} ตัว`);
       dg = needG; dpc = 0; }
     if (dg > 0) { for (const l of lots) { if (dg <= 0) break; const g = Math.min(free[l.id].g, dg); if (g > 0) { take(l, 0, g); dg -= g; } }
-      if (dg > 0) warn.push(`${p.name}: น้ำหนักในสต็อกไม่พอ ขาดอีก ${fmtW(dg)}`); }
-  }
-  if (dg < 0 || dpc < 0) { let bg = Math.max(0, -dg), bp = Math.max(0, -dpc);
-    for (const l of lots.filter(l => net[l.id]).reverse()) { if (bg <= 0 && bp <= 0) break; const v = net[l.id]; const gp = Math.min(bp, v.pc), gg = Math.min(bg, v.g);
-      if (gp || gg) mv({type:'RETURN', product_id:pid, lot_id:l.id, grams:gg, pcs:gp, order_id:o.id, reason:why}); bp -= gp; bg -= gg; } }
+      if (dg > 0) warn.push(`${p.name}${b !== '*' ? ' ' + b : ''}: น้ำหนักในสต็อกไม่พอ ขาดอีก ${fmtW(dg)}`); }
+    if (dg < 0 || dpc < 0) { let bg = Math.max(0, -dg), bp = Math.max(0, -dpc);
+      for (const l of lots.slice().reverse()) { if (bg <= 0 && bp <= 0) break; const v = netLB[b + '|' + l.id]; if (!v) continue; const gp = Math.min(bp, v.pc), gg = Math.min(bg, v.g);
+        if (gp || gg) mv({type:'RETURN', product_id:pid, lot_id:l.id, grams:gg, pcs:gp, order_id:o.id, bucket:b, reason:why}); bp -= gp; bg -= gg; } }
+  });
 }
 
 /* ----- ชั่งน้ำหนักจริงตอนแพ็ก ----- */
