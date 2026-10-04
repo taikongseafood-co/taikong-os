@@ -2320,10 +2320,11 @@ function catalogProduct(p, i) {
     methods:ms.map(m => sizesOf(m).length   // ราคาปลีกของแต่ละวิธีขาย / แต่ละไซซ์เท่านั้น (ไม่มีราคาส่ง) · ไซซ์มีสถานะของตัวเอง
       ? {name:String(m.name || ''), type:m.type, price:Math.min(...shownSizes(m).map(s => +s.price)), sizes:shownSizes(m).map(s => ({grade:String(s.grade), price:Math.round(+s.price * 100) / 100, status:sizeStatus(p, s.grade)}))}
       : {name:String(m.name || ''), type:m.type, price:Math.round(+m.price * 100) / 100})};
-  const pm = ms.find(m => m.type === 'PIECE_ACTUAL_WEIGHT');
+  const pm = ms.find(m => m.type === 'PIECE_ACTUAL_WEIGHT') || ms.find(m => m.type === 'WEIGHT');   // ปลาที่ชั่งรายตัว: ราคาตามวิธี "ขายเป็นตัว" (ถ้าไม่มี ใช้ "ตามน้ำหนัก")
+  if (pm) o.pieces_by = String(pm.name || '');
   if (pm && tracksPcs(p) && stockOn(p))   // ปลารายตัวที่ชั่งไว้และยังว่าง: น้ำหนัก + ราคา (ไม่มีรหัส Lot/ต้นทุน)
     o.pieces = pieceStates(p.id).filter(x => x.state === 'available').sort((a, b) => b.g - a.g).slice(0, 40).map(x => { const gr = (DB.stock_lots.find(l => l.id === x.lot_id) || {}).grade; return gr ? {g:x.g, price:priceOfG(x.g, pm.price), grade:gr} : {g:x.g, price:priceOfG(x.g, pm.price)}; });
-  if (pm && tracksPcs(p) && stockOn(p)) { const st = stockOf(p.id); if (st.pc > 0 && st.g > 0) o.avg_piece_g = Math.round(st.g / st.pc / 10) * 10; }   // น้ำหนักเฉลี่ยต่อตัว (ข้อมูลประกอบ)
+  if (pm && pm.type === 'PIECE_ACTUAL_WEIGHT' && tracksPcs(p) && stockOn(p)) { const st = stockOf(p.id); if (st.pc > 0 && st.g > 0) o.avg_piece_g = Math.round(st.g / st.pc / 10) * 10; }   // น้ำหนักเฉลี่ยต่อตัว (ข้อมูลประกอบ)
   return o;
 }
 function stockUpdatedAt(ids) { let t = ''; DB.stock_movements.forEach(m => { if (ids.has(m.product_id) && m.at > t) t = m.at; }); return t; }
