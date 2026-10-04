@@ -933,15 +933,15 @@ function draftFromOrder(o) {
         override:i.selling_price !== i.original_price, selling_price:i.selling_price, snap:{...i}}; })};
 }
 const availPieces = (pid, ownIds = []) => { const own = new Set(ownIds); return pieceStates(pid).filter(x => x.state === 'available' || own.has(x.id) || (x.state === 'reserved' && F && F.id && x.order_id === F.id)).sort((a, b) => b.g - a.g); };
-function defaultPmode(p) { return availPieces(p.id).length ? 'pick' : 'count'; }
+const canPick = (p, m) => !!m && tracksPcs(p) && (m.type === 'PIECE_ACTUAL_WEIGHT' || m.type === 'WEIGHT');
+function defaultPmode(p, m) { m = m || methodsOf(p)[0]; return m && m.type === 'PIECE_ACTUAL_WEIGHT' && availPieces(p.id).length ? 'pick' : 'count'; }
 /* คำนวณบรรทัด: ราคา = น้ำหนักจริง(กรัม) × ราคา/kg · ยังไม่รู้น้ำหนักจริง = ประมาณการจากน้ำหนักเฉลี่ย (รอชั่งตอนแพ็ก) */
 function lineCalc(l) {
   const p = P(l.product_id); if (!p) return null; const m = methodOf(p, l.method_id); if (!m) return null;
   const piece = tracksPcs(p); let g = 0, pcs = 0, weighed = true, pick = false;
-  if (m.type === 'PIECE_ACTUAL_WEIGHT') {
-    if ((l.pmode || 'pick') === 'pick') { pick = true; const ix = pieceIndex(p.id); pcs = (l.piece_ids || []).length; g = (l.piece_ids || []).reduce((s, id) => s + (ix[id]?.g || 0), 0); }
-    else { pcs = Math.max(0, Math.round(+l.pcs || 0)); const ag = toG(l.actual_kg); if (ag > 0) g = ag; else { g = Math.round(pcs * countAvgG(p.id)); weighed = false; } }
-  } else { g = toG(l.kg); if (piece) { pcs = Math.max(0, Math.round(+l.actual_pcs || 0)); weighed = pcs > 0; } }
+  if (canPick(p, m) && (l.pmode || (m.type === 'PIECE_ACTUAL_WEIGHT' ? 'pick' : 'count')) === 'pick') { pick = true; const ix = pieceIndex(p.id); pcs = (l.piece_ids || []).length; g = (l.piece_ids || []).reduce((s, id) => s + (ix[id]?.g || 0), 0); }
+  else if (m.type === 'PIECE_ACTUAL_WEIGHT') { pcs = Math.max(0, Math.round(+l.pcs || 0)); const ag = toG(l.actual_kg); if (ag > 0) g = ag; else { g = Math.round(pcs * countAvgG(p.id)); weighed = false; } }   // ระบุจำนวนตัว: รอชั่งจริง
+  else { g = toG(l.kg); if (piece) { pcs = Math.max(0, Math.round(+l.actual_pcs || 0)); weighed = pcs > 0; } }
   const s = sizesOf(m).length ? (sizesOf(m).find(x => x.id === l.size_id) || sizesOf(m)[0]) : null;   // ตามไซซ์: ราคา + ราคาส่งของไซซ์นั้น
   const kg = g / 1000, keep = l.snap && l.snap.product_id === l.product_id && l.snap.method_id === m.id && (l.snap.size_id || '') === (s ? s.id : '');   // รายการเดิม: ราคา/ต้นทุน snapshot
   const t = keep ? {tier:l.snap.price_tier, price:l.snap.original_price} : tierForM(s || m, kg);
@@ -987,8 +987,8 @@ function vOrderForm(existing) {
   return shell('orders', F.id ? 'แก้ไข ' + F.order_number : 'สร้างออเดอร์', F.id ? 'เลขออเดอร์คงเดิม · ราคาและต้นทุนของรายการเดิมคงเป็นค่า ณ วันที่สร้าง' : 'เลือกลูกค้า เลือกสินค้าและวิธีขาย — ระบบคำนวณราคาให้ · เลขออเดอร์สร้างอัตโนมัติเมื่อบันทึก', '', body);
 }
 function setLineProduct(i, pid) { const l = F.items[i], p = P(pid); l.product_id = pid; l.override = false; l.piece_ids = []; l.snap = null;
-  if (p) { const m = methodsOf(p)[0]; l.method_id = m ? m.id : ''; l.size_id = m && sizesOf(m)[0] ? sizesOf(m)[0].id : ''; l.pmode = defaultPmode(p); } refreshForm(true); }
-function setLineMethod(i, v) { const l = F.items[i], p = P(l.product_id), [mid, sid] = String(v).split('|'); l.method_id = mid; l.size_id = sid || ''; l.override = false; l.piece_ids = []; if (p) l.pmode = defaultPmode(p); refreshForm(true); }
+  if (p) { const m = methodsOf(p)[0]; l.method_id = m ? m.id : ''; l.size_id = m && sizesOf(m)[0] ? sizesOf(m)[0].id : ''; l.pmode = defaultPmode(p, m); } refreshForm(true); }
+function setLineMethod(i, v) { const l = F.items[i], p = P(l.product_id), [mid, sid] = String(v).split('|'); l.method_id = mid; l.size_id = sid || ''; l.override = false; l.piece_ids = []; if (p) l.pmode = defaultPmode(p, methodOf(p, mid)); refreshForm(true); }
 function togglePiece(i, id, on) { const l = F.items[i]; const s = new Set(l.piece_ids || []); on ? s.add(id) : s.delete(id); l.piece_ids = [...s]; refreshForm(true); }
 function refreshForm(itemsToo) {
   const ci = $('#custinfo');
@@ -1008,6 +1008,12 @@ function refreshForm(itemsToo) {
           ${pick ? (ps.length ? `<div class="row" style="gap:6px">${ps.map(x => `<label class="pchip ${(l.piece_ids || []).includes(x.id) ? 'on' : ''}"><input type="checkbox" ${(l.piece_ids || []).includes(x.id) ? 'checked' : ''} onchange="togglePiece(${i},'${x.id}',this.checked)"> <b class="num">${fmtW(x.g)}</b> <span class="num">${baht(priceOfG(x.g, lc.price))}</span></label>`).join('')}</div>` : '<span class="small" style="color:var(--red)">ไม่มีปลาที่ชั่งรายตัวว่าง · เลือก "ระบุจำนวนตัว"</span>')
             : `<div class="r"><label class="f">จำนวนตัว<input class="in num" type="number" inputmode="numeric" min="1" step="1" value="${l.pcs}" oninput="F.items[${i}].pcs=+this.value;refreshLine(${i})"></label>
                <label class="f">น้ำหนักจริง (kg) ถ้าชั่งแล้ว<input class="in num" type="number" inputmode="decimal" step="0.001" min="0" value="${l.actual_kg}" placeholder="ชั่งตอนแพ็ก" oninput="F.items[${i}].actual_kg=this.value;refreshLine(${i})"></label></div>`}`;
+      } else if (m && canPick(p, m) && (l.pmode === 'pick' || availPieces(p.id, l.piece_ids).length)) {
+        const ps = availPieces(p.id, l.piece_ids), pick = l.pmode === 'pick';
+        ctl = `<div class="seg" style="width:max-content"><button type="button" class="${!pick ? 'on' : ''}" onclick="F.items[${i}].pmode='count';F.items[${i}].piece_ids=[];refreshForm(true)">⚖️ ชั่งน้ำหนักเอง</button><button type="button" class="${pick ? 'on' : ''}" onclick="F.items[${i}].pmode='pick';refreshForm(true)">🐟 เลือกตัวที่ชั่งไว้ (${ps.length})</button></div>
+          ${pick ? `<div class="row" style="gap:6px">${ps.map(x => `<label class="pchip ${(l.piece_ids || []).includes(x.id) ? 'on' : ''}"><input type="checkbox" ${(l.piece_ids || []).includes(x.id) ? 'checked' : ''} onchange="togglePiece(${i},'${x.id}',this.checked)"> <b class="num">${fmtW(x.g)}</b> <span class="num">${baht(priceOfG(x.g, lc.price))}</span></label>`).join('')}</div>`
+            : `<div class="r"><label class="f">น้ำหนัก (kg)<input class="in num" type="number" inputmode="decimal" step="0.001" min="0" value="${l.kg}" oninput="F.items[${i}].kg=this.value;refreshLine(${i})"></label>
+               <label class="f">จำนวนตัวจริง<input class="in num" type="number" inputmode="numeric" min="0" step="1" value="${l.actual_pcs}" placeholder="ใส่ตอนแพ็ก" oninput="F.items[${i}].actual_pcs=this.value;refreshLine(${i})"></label></div>`}`;
       } else if (m) {
         ctl = `<div class="r"><label class="f">น้ำหนัก (kg)<input class="in num" type="number" inputmode="decimal" step="0.001" min="0" value="${l.kg}" oninput="F.items[${i}].kg=this.value;refreshLine(${i})"></label>
           ${piece ? `<label class="f">จำนวนตัวจริง<input class="in num" type="number" inputmode="numeric" min="0" step="1" value="${l.actual_pcs}" placeholder="ใส่ตอนแพ็ก" oninput="F.items[${i}].actual_pcs=this.value;refreshLine(${i})"></label>` : ''}</div>`;
@@ -1040,8 +1046,8 @@ function stockNeedCheck(draft) {
     out[pid] = {q, can, ok:q <= can, p:st.p, txt:`ต้องการ ${fmtW(q)} ขายได้ ${fmtW(can)}`}; });
   Object.entries(needC).forEach(([k, n]) => { const [pid, grade] = k.split('|'), cs = countSellable(pid, draft.id, grade || undefined);
     const ord = draft.id ? DB.orders.find(o => o.id === draft.id) : null; if (ord && ['shipped', 'delivered'].includes(ord.status)) { const nt = Object.values(orderLotNet(ord.id, pid)); cs.g += nt.reduce((s, v) => s + v.g, 0); cs.pc += nt.reduce((s, v) => s + v.pc, 0); }
-    const ok = n.pc <= cs.pc && (n.g <= cs.g || n.pc === 0 ? n.g <= cs.g : true);
-    out['c-' + k] = {q:n.g, can:cs.g, ok, p:P(pid), txt:`${grade ? 'ไซซ์ ' + grade + ' ' : ''}ต้องการ ${n.pc ? n.pc + ' ตัว ' : ''}${fmtW(n.g)} · ขายได้ ${cs.pc} ตัว ${fmtW(cs.g)}`}; });
+    const ok = n.g <= cs.g;   // ตัดสินจากน้ำหนัก · จำนวนตัวเป็นข้อมูลประกอบ (Lot เก่าบางล็อตไม่มีจำนวนตัว)
+    out['c-' + k] = {q:n.g, can:cs.g, ok, p:P(pid), txt:`${grade ? 'ไซซ์ ' + grade + ' ' : ''}ต้องการ ${fmtW(n.g)} · ของที่ไม่ได้ชั่งรายตัวเหลือ ${fmtW(cs.g)}${availPieces(pid).length ? ` · มีปลาชั่งรายตัว ${availPieces(pid).length} ตัว ให้กด "เลือกตัวที่ชั่งไว้"` : ''}`}; });
   draft.items.forEach(l => { const lc = lineCalc(l); if (!lc || !lc.pick) return; const st = Object.fromEntries(pieceStates(lc.p.id).map(x => [x.id, x]));
     if (!(l.piece_ids || []).length) out['pick-' + lc.p.id] = {ok:false, p:lc.p, txt:'เลือกปลาอย่างน้อย 1 ตัว'};
     (l.piece_ids || []).forEach(id => { const x = st[id]; const mine = x && ((x.state === 'reserved' && x.order_id === draft.id) || (x.state === 'sold' && draft.id && DB.stock_movements.some(m => m.piece_id === id && m.order_id === draft.id)));
@@ -1052,7 +1058,7 @@ function metaLine(l, lc, i) {
   if (!lc) return '';
   const p = lc.p; let av = '';
   if (stockOn(p) && lc.grade && !tracksPcs(p)) { const can = gradeAvail(p.id, lc.grade, F.id); av = `<span style="color:${lc.g <= can ? 'var(--green)' : 'var(--red)'}">${lc.g <= can ? '✓' : '⚠'} ไซซ์ ${esc(lc.grade)} ขายได้ ${fmtW(can)}</span>`; }
-  else if (stockOn(p)) { if (tracksPcs(p) && !lc.pick) { const cs = countSellable(p.id, F.id, lc.grade || undefined); av = `<span class="muted">${lc.grade ? 'ไซซ์ ' + esc(lc.grade) + ' ' : 'ของรวม'}ขายได้ ${cs.pc} ตัว · ${fmtW(cs.g)}</span>`; }
+  else if (stockOn(p)) { if (tracksPcs(p) && !lc.pick) { const cs = countSellable(p.id, F.id, lc.grade || undefined), np = availPieces(p.id).length; av = `<span style="color:${lc.g <= cs.g ? 'var(--green)' : 'var(--red)'}">${lc.g <= cs.g ? '✓' : '⚠'} ${lc.grade ? 'ไซซ์ ' + esc(lc.grade) + ' ' : 'ของที่ไม่ได้ชั่งรายตัว '}ขายได้ ${fmtW(cs.g)}${cs.pc ? ' · ' + cs.pc + ' ตัว' : ''}</span>${np && !lc.grade ? `<span class="muted">· ปลาชั่งรายตัว ${np} ตัว</span>` : ''}`; }
     else if (!tracksPcs(p)) { const chk = stockNeedCheck({...F, items:[l]})[p.id]; if (chk) av = `<span style="color:${chk.ok ? 'var(--green)' : 'var(--red)'}">${chk.ok ? '✓' : '⚠'} ขายได้ (${F.channel || 'LINE'}) ${fmtW(chk.can)}</span>`; } }
   else av = '<span class="muted">ยังไม่ได้รับสินค้าเข้า (ไม่ติดตามสต็อก)</span>';
   if (stockOn(p) && !lc.grade && gradesInStock(p.id).length) av += `<span class="muted">ไซซ์ในสต็อก: ${gradesInStock(p.id).map(esc).join(', ')} (ตัด Lot เก่าสุดก่อน)</span>`;
@@ -2576,7 +2582,6 @@ function syncPBW(o, p, mode, ch, why, warn) {
     if (dpc > 0) { let needPc = dpc, needG = Math.max(0, dg);
       for (const l of lots) { if (needPc <= 0) break; const f = free[l.id]; if (f.pc <= 0) continue; const n = Math.min(f.pc, needPc);
         const g = needPc === n ? Math.min(needG, f.g) : Math.min(f.g, Math.round(needG * n / needPc)); take(l, n, g); needPc -= n; needG -= g; }
-      if (needPc > 0) warn.push(`${p.name}${b !== '*' ? ' ' + b : ''}: จำนวนตัวในสต็อกไม่พอ ขาดอีก ${needPc} ตัว`);
       dg = needG; dpc = 0; }
     if (dg > 0) { for (const l of lots) { if (dg <= 0) break; const g = Math.min(free[l.id].g, dg); if (g > 0) { take(l, 0, g); dg -= g; } }
       if (dg > 0) warn.push(`${p.name}${b !== '*' ? ' ' + b : ''}: น้ำหนักในสต็อกไม่พอ ขาดอีก ${fmtW(dg)}`); }
