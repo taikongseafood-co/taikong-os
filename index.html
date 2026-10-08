@@ -2365,8 +2365,13 @@ function catalogStatus(p) {
   if (!stockOn(p)) return 'ask';
   if (tracksPcs(p)) {   // สินค้านับตัว: ตัดสินจากจำนวนตัวที่ขายได้ (รายตัวที่ว่าง + ของรวม) · เกณฑ์ปรับรายสินค้าได้
     if (stockOf(p.id).sell.LINE <= 0) return 'soldout';
-    const n = pieceStates(p.id).filter(x => x.state === 'available').length + countSellable(p.id).pc, thr = +p.catalog_low_threshold > 0 ? +p.catalog_low_threshold : 3;
-    return n <= 0 ? 'soldout' : n <= thr ? 'low' : 'available'; }
+    // ดูทั้งน้ำหนักและจำนวนตัว แล้วใช้สถานะที่ดีกว่า (Lot ที่รับเข้าแบบน้ำหนักรวมอาจไม่มีจำนวนตัว)
+    const av = pieceStates(p.id).filter(x => x.state === 'available'), cs = countSellable(p.id), rank = {soldout:0, low:1, available:2};
+    const n = av.length + cs.pc, thr = +p.catalog_low_threshold > 0 ? +p.catalog_low_threshold : 3;
+    const byPc = n <= 0 ? 'soldout' : n <= thr ? 'low' : 'available';
+    const g = Math.min(stockOf(p.id).sell.LINE, cs.g + av.reduce((t, x) => t + x.g, 0)), minG = +p.catalog_min_order > 0 ? +p.catalog_min_order : 1000;
+    const byW = g < minG ? 'soldout' : g <= 3000 ? 'low' : 'available';
+    return rank[byW] > rank[byPc] ? byW : byPc; }
   const q = stockOf(p.id).sell.LINE, t = catThresholds(p);            // น้ำหนัก: กรัมที่ขายได้ทาง LINE
   return q < t.min ? 'soldout' : q <= t.low ? 'low' : 'available';
 }
