@@ -2168,7 +2168,7 @@ function renderReceive() {
   <div style="margin-top:14px"><div class="seg" style="margin-bottom:10px"><button class="${RV.lotmode !== 'pieces' ? 'on' : ''}" onclick="RV.lotmode='count';renderReceive()">น้ำหนักรวม</button><button class="${RV.lotmode === 'pieces' ? 'on' : ''}" onclick="RV.lotmode='pieces';renderReceive()">ชั่งรายตัว</button></div>
     ${RV.lotmode === 'pieces' ? `<label class="f">น้ำหนักแต่ละตัว (กรัม) · คั่นด้วยเว้นวรรคหรือขึ้นบรรทัดใหม่<textarea class="in num" placeholder="555&#10;658&#10;620" oninput="RV.weights=this.value;rvSum()">${esc(RV.weights)}</textarea></label>
       <p class="small muted" style="margin:6px 0 0">ระบบจำปลาแต่ละตัวไว้${piece ? '' : ' และเริ่มนับจำนวนตัวของสินค้านี้ให้อัตโนมัติ'} · ${hasPieceMethod(p) ? 'ลูกค้าเลือกตัวได้จากเมนู (วิธี "ขายเป็นตัว")' : 'ถ้าอยากให้ลูกค้าเลือกตัวได้ เพิ่มวิธีขาย "ขายเป็นตัว" ที่หน้า Products'}</p>`
-    : piece ? `<div class="fgrid"><label class="f">จำนวน (ตัว)<input class="in num" type="number" inputmode="numeric" min="0" value="${RV.pcs}" oninput="RV.pcs=this.value;rvSum()"></label><label class="f">น้ำหนักรวม (kg)<input class="in num" type="number" inputmode="decimal" step="0.001" min="0" value="${RV.kg}" oninput="RV.kg=this.value;rvSum()"></label></div>`
+    : piece ? `<div class="fgrid"><label class="f">จำนวน (ตัว) · ไม่บังคับ<input class="in num" type="number" inputmode="numeric" min="0" value="${RV.pcs}" placeholder="ไม่ระบุก็ได้" oninput="RV.pcs=this.value;rvSum()"></label><label class="f">น้ำหนักรวม (kg)<input class="in num" type="number" inputmode="decimal" step="0.001" min="0" value="${RV.kg}" oninput="RV.kg=this.value;rvSum()"></label></div>`
     : `<div class="fgrid"><label class="f">น้ำหนัก (kg)<input class="in num" type="number" inputmode="decimal" step="0.001" min="0" value="${RV.kg}" oninput="RV.kg=this.value;rvSum()"></label><label class="f">จำนวนตัว (ไม่บังคับ)<input class="in num" type="number" inputmode="numeric" min="0" value="${RV.pcs}" oninput="RV.pcs=this.value;rvSum()"></label></div>`}
   </div>
   <div class="fgrid" style="margin-top:12px"><label class="f">ราคาที่จ่ายทั้งหมด (฿)<input class="in num" id="rvcost" type="number" inputmode="decimal" min="0" value="${RV.cost}" oninput="RV.cost=this.value;RV.perkg='';rvSum()"></label><label class="f">หรือราคาต่อ kg (฿)<input class="in num" id="rvperkg" type="number" inputmode="decimal" min="0" value="${RV.perkg}" oninput="RV.perkg=this.value;RV.cost='';rvSum()"></label></div>
@@ -2187,7 +2187,7 @@ function rvSum() {
 }
 function saveReceive() {
   const c = rvCalc(), k = rvCost(c), p = P(RV.pid);
-  if (c.each && !c.ws.length) return toast('ใส่น้ำหนักแต่ละตัว'); if (!(c.g > 0)) return toast('ใส่น้ำหนักก่อน'); if (c.piece && !(c.pcs > 0)) return toast('ใส่จำนวนตัวก่อน');
+  if (c.each && !c.ws.length) return toast('ใส่น้ำหนักแต่ละตัว'); if (!(c.g > 0)) return toast('ใส่น้ำหนักก่อน');   // จำนวนตัวไม่บังคับ
   const now = new Date().toISOString();
   p.unit = 'kg';
   if (c.each && !tracksPcs(p)) p.stock_type = 'PIECE_BY_WEIGHT';   // ชั่งรายตัว → เริ่มนับจำนวนตัวของสินค้านี้ (ของเดิมยังนับเป็นน้ำหนัก)
