@@ -117,6 +117,28 @@ h2.sec .more{margin-left:auto;font-size:13.5px;color:var(--blue);font-weight:500
 .pc-row .w{font-weight:700;min-width:70px}.pc-row .pp{font-weight:700;color:var(--blue);flex:1}
 .pc-row a{flex:none;min-height:38px;padding:0 12px;font-size:14px}
 .gchip{display:inline-block;background:var(--blue-soft);color:var(--blue);border-radius:99px;padding:1px 9px;margin:2px 2px 0 0;font-weight:600;font-size:12px}
+.cartbtn{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-weight:600;white-space:nowrap}
+.cartbtn .cnt{background:var(--blue);color:#fff;border-radius:99px;font-size:12px;padding:0 7px;min-width:20px;text-align:center}
+.addbtn{flex:none;min-height:38px;padding:0 14px;border-radius:12px;border:1.5px solid var(--blue);background:var(--surface);color:var(--blue);font-weight:600;cursor:pointer;font-size:14px}
+.addbtn.pri{background:var(--blue);color:#fff}
+.chosen{flex:none;font-size:13px;font-weight:600;color:var(--green);background:var(--green-soft);border-radius:99px;padding:4px 12px}
+.cartbar{display:flex;align-items:center;gap:10px;min-height:50px;padding:0 16px;border-radius:14px;background:var(--blue);color:#fff;font-weight:600;width:100%}
+.cartbar .grow{flex:1}
+.floatbar{position:fixed;left:0;right:0;bottom:0;z-index:30;padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));background:color-mix(in srgb,var(--bg) 90%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.floatbar .in{max-width:720px;margin:0 auto}
+.minirow{display:flex;gap:8px}.minirow>*{flex:1;min-height:42px;font-size:14px}
+.shov{position:fixed;inset:0;z-index:50;background:rgba(11,37,69,.45);display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--surface);width:100%;max-width:560px;border-radius:22px 22px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom,0px));max-height:90vh;overflow:auto}
+@media (min-width:700px){.shov{align-items:center}.sheet{border-radius:22px}}
+.kgchips{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.kgchips button{min-height:44px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-weight:600;cursor:pointer}
+.kgchips button.on{border:2px solid var(--blue);background:var(--blue-soft);color:var(--blue)}
+.stepper{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.stepper button{width:42px;min-height:40px;border:0;background:var(--surface-2);font-size:20px;cursor:pointer;color:var(--ink)}
+.stepper span{min-width:70px;text-align:center;font-weight:700}
+.citem{display:flex;gap:10px;border:1px solid var(--line);border-radius:14px;padding:12px;background:var(--surface)}
+.citem .rm{border:0;background:none;color:var(--red);cursor:pointer;font-size:13px;padding:6px 0 0}
+.notice{background:var(--amber-soft);color:var(--amber);border-radius:12px;padding:10px 12px;font-size:13.5px;margin-top:12px}
 .pcs-line{font-size:12.5px;color:var(--green);font-weight:600;margin-top:2px}
 @media (min-width:900px){
   .d{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:32px;align-items:start;padding-top:20px}
@@ -203,11 +225,12 @@ function updatedText() {
   return 'อัปเดตล่าสุด ' + (ymd(d) === ymd(new Date()) ? hm : `${d.getDate()} ${TH_M[d.getMonth()]} ${hm}`);
 }
 const methods = p => Object.values(p.methods || {}).filter(x => x && x.price > 0);
-const MT = {WEIGHT:'⚖️ ตามน้ำหนัก (ชั่งจริง)', SIZE_GRADE_WEIGHT:'📏 ตามไซซ์', PIECE_ACTUAL_WEIGHT:'🐟 ขายเป็นตัว · คิดตามน้ำหนักจริง'};
+const MT = {WEIGHT:'⚖️ ตามน้ำหนัก (ชั่งจริง)', SIZE_GRADE_WEIGHT:'📏 ตามไซซ์', PIECE_ACTUAL_WEIGHT:'🐟 ขายเป็นตัว · คิดตามน้ำหนักจริง', PACK:'📦 ขายเป็นแพ็ค · ราคาต่อแพ็ค'};
+const packsOfM = mm => Object.values((mm && mm.packs) || {}).filter(x => x && x.price > 0);
 const grades = p => Object.values(p.grades || {}).filter(Boolean);
 const gradeHtml = p => grades(p).length > 1 ? `ไซซ์ในสต็อก: ${grades(p).map(esc).join(' · ')}` : '';
-const allPrices = p => methods(p).flatMap(x => { const ss = Object.values(x.sizes || {}); return ss.length ? ss.map(s => s.price) : [x.price]; }).filter(v => v > 0);
-const priceHtml = p => { const ps = allPrices(p); if (!ps.length) return p.retail_price > 0 ? `${baht(p.retail_price)}<small> / kg</small>` : '<small>สอบถามราคา</small>';
+const allPrices = p => methods(p).filter(x => x.type !== 'PACK').flatMap(x => { const ss = Object.values(x.sizes || {}); return ss.length ? ss.map(s => s.price) : [x.price]; }).filter(v => v > 0);
+const priceHtml = p => { const ps = allPrices(p); if (!ps.length && p.pack_price > 0) return `${baht(p.pack_price)}<small> / แพ็ค</small>`; if (!ps.length) return p.retail_price > 0 ? `${baht(p.retail_price)}<small> / kg</small>` : '<small>สอบถามราคา</small>';
   const lo = Math.min(...ps), hi = Math.max(...ps); return `${baht(lo)}${hi > lo ? '–' + baht(hi).slice(1) : ''}<small> / kg</small>`; };
 const fmtG = g => g >= 1000 ? (g / 1000).toLocaleString('th-TH', {maximumFractionDigits:3}) + ' kg' : g + ' g';
 const pieces = p => Object.values(p.pieces || {}).filter(x => x && x.g > 0);
@@ -219,12 +242,13 @@ function card(p) {
   return `<a class="card ${p.status === 'soldout' ? 'out' : ''}" href="?p=${encodeURIComponent(p.slug)}" data-nav aria-label="${esc(title(p))} ดูรายละเอียด">
     <div class="ph">${CAT_EMOJI[p.category] || '🐟'}${p.image_v ? `<img alt="${esc(p.name)}" data-slug="${esc(p.slug)}" data-size="thumb" data-v="${p.image_v}">` : ''}<span class="st ${esc(p.status)}">${ST[p.status] || ''}</span>${isNew(p) ? '<span class="new">เข้าใหม่</span>' : ''}</div>
     <div class="b"><div class="nm">${esc(p.name)}</div>${p.size ? `<div class="sz">${esc(p.size)}</div>` : ''}${gradeHtml(p) ? `<div class="sz">${gradeHtml(p)}</div>` : ''}${avgHtml(p) ? `<div class="sz">${avgHtml(p)}</div>` : ''}
-      ${(() => { const n = methods(p).reduce((s, x) => s + (Object.values(x.sizes || {}).length || 1), 0); const ss = methods(p).flatMap(x => Object.values(x.sizes || {})); return ss.length > 1 ? `<div class="sz">${ss.length} ไซซ์${n > ss.length ? ' · ' + (n - ss.length) + ' วิธีขายอื่น' : ''}</div>` : n > 1 ? `<div class="sz">${n} วิธีขาย</div>` : ''; })()}<div class="pr num">${priceHtml(p)}</div>${pieces(p).length ? `<div class="pcs-line">🐟 เลือกตัวได้ ${pieces(p).length} ตัว</div>` : ''}<div class="more-i">ดูรายละเอียด ›</div></div></a>`;
+      ${(() => { const n = methods(p).reduce((s, x) => s + (Object.values(x.sizes || {}).length || packsOfM(x).length || 1), 0); const ss = methods(p).flatMap(x => Object.values(x.sizes || {})); return ss.length > 1 ? `<div class="sz">${ss.length} ไซซ์${n > ss.length ? ' · ' + (n - ss.length) + ' วิธีขายอื่น' : ''}</div>` : n > 1 ? `<div class="sz">${n} วิธีขาย</div>` : ''; })()}<div class="pr num">${priceHtml(p)}</div>${p.pack_price > 0 && allPrices(p).length ? `<div class="sz">📦 แพ็คละ ${baht(p.pack_price)}</div>` : ''}${pieces(p).length ? `<div class="pcs-line">🐟 เลือกตัวได้ ${pieces(p).length} ตัว</div>` : ''}<div class="more-i">ดูรายละเอียด ›</div></div></a>`;
 }
 function topbar(back, q = '') {
   const m = CAT.meta;
   return `<header class="bar"><div class="in">${back ? `<button class="back" onclick="goBack()" aria-label="ย้อนกลับ">‹ กลับ</button>` : `<a href="./" data-nav style="display:flex;gap:10px;align-items:center"><div class="logo">${m.logo && m.logo.startsWith('data:image/') ? `<img src="${m.logo}" alt="">` : '🦐'}</div><div class="brand"><b>${esc(m.name_en || 'TAIKONG SEAFOOD')}</b><small>${esc(m.name || 'ไต้ก๋ง ซีฟู้ด')}</small></div></a>`}
     <div class="grow"></div><label class="search"><span class="sr" style="position:absolute;left:-9999px">ค้นหาสินค้า</span><input id="q" type="search" enterkeyhint="search" placeholder="ค้นหา เช่น หมึก, กุ้ง, 4–6 ตัว" value="${esc(q)}" oninput="onSearch(this.value)" autocomplete="off"></label>
+    <a class="cartbtn" href="?cart=1" data-nav aria-label="ตะกร้า ${CART.length} รายการ">🛒 ตะกร้า <span class="cnt">${CART.length}</span></a>
     ${lineUrl('') ? `<a class="linebtn" href="${esc(lineUrl('สวัสดีค่ะ สนใจสั่งของทะเล'))}" target="_blank" rel="noopener" aria-label="LINE">${LINE_SVG} LINE</a>` : ''}</div></header>`;
 }
 function chips(active) {
@@ -233,6 +257,117 @@ function chips(active) {
 }
 const legend = () => `<div class="legend"><span>${ST.available}</span><span>${ST.low}</span><span>${ST.soldout}</span></div>`;
 const grid = L => L.length ? `<div class="grid" style="margin-top:12px">${L.map(card).join('')}</div>` : '<div class="empty">ไม่พบสินค้า</div>';
+
+/* ---------- Cart · เก็บในเครื่องลูกค้า (ยังไม่จองสต็อก · ยังไม่สร้างออเดอร์) ----------
+   รายการ = สินค้า + วิธีขาย/ไซซ์ + น้ำหนัก (kg) หรือปลาตัวที่เลือก + ราคาที่คำนวณ → เตรียมส่งต่อ Order Request (Phase ถัดไป) */
+const CART_KEY = 'tkcart:v1', KG_STEP = 0.5, KG_MIN = 0.5, KG_MAX = 100;
+let CART = []; try { CART = JSON.parse(localStorage.getItem(CART_KEY) || '[]'); if (!Array.isArray(CART)) CART = []; } catch (e) { CART = []; }
+let CART_NOTICE = '';
+const r2 = n => Math.round((+n || 0) * 100) / 100;
+const kgTxt = kg => (+kg).toLocaleString('th-TH', {maximumFractionDigits:3}) + ' kg';
+const lineTotal = it => it.kind === 'pack' ? r2(it.packs * it.price) : it.kind === 'piece' ? r2(it.price) : it.kind === 'pcs' ? r2(it.pcs * (it.est_g || 0) / 1000 * it.price_kg) : r2(it.kg * it.price_kg);
+const cartTotal = () => r2(CART.reduce((s, it) => s + lineTotal(it), 0));
+const cartHasEst = () => CART.some(it => it.kind === 'pcs');
+const inCart = k => CART.some(it => it.kind === 'piece' && it.piece_k === k);
+function saveCart() { try { localStorage.setItem(CART_KEY, JSON.stringify(CART)); } catch (e) {} }
+const mid = (mm, i) => mm.id || 'm' + i;
+const findMethod = (p, id) => methods(p).find((x, i) => mid(x, i) === id);
+/* ตรวจตะกร้ากับเมนูล่าสุด: ราคาเปลี่ยนตาม · ของที่หมด/ถูกนำออก เอาออกและแจ้งลูกค้า */
+function reconcileCart() {
+  const gone = [];
+  CART = CART.filter(it => {
+    const p = CAT.list.find(x => x.slug === it.slug); if (!p) { gone.push(it.product); return false; }
+    if (it.kind === 'piece') { const x = pieces(p).find(z => z.k === it.piece_k); if (!x) { gone.push(`${it.product} ตัว ${fmtG(it.g)}`); return false; } it.price = x.price; it.g = x.g; return true; }
+    const mm = findMethod(p, it.method_id); if (!mm) { gone.push(it.product); return false; }
+    if (it.kind === 'pack') { const k = packsOfM(mm).find(z => z.id === it.pack_id); if (!k || k.status === 'soldout') { gone.push(`${it.product} ${it.pack_name}`); return false; } it.price = k.price; it.pack_name = k.name; it.pack_g = k.g; return true; }
+    if (it.size_id) { const s = Object.values(mm.sizes || {}).find(z => z.id === it.size_id); if (!s || s.status === 'soldout') { gone.push(`${it.product} ${it.grade}`); return false; } it.price_kg = s.price; it.grade = s.grade; }
+    else it.price_kg = mm.price;
+    if (it.kind === 'pcs') it.est_g = p.avg_piece_g || 0;
+    return true; });
+  if (gone.length) { CART_NOTICE = 'นำออกจากตะกร้าเพราะสินค้าหมดแล้ว: ' + gone.join(', '); saveCart(); }
+}
+let SH = null;
+function openSheet(slug, methodId, sizeId) {
+  const p = CAT.list.find(x => x.slug === slug), mm = p && findMethod(p, methodId); if (!mm) return;
+  if (mm.type === 'PACK') { const pk = packsOfM(mm).find(z => z.id === sizeId) || packsOfM(mm)[0]; if (!pk) return; SH = {p, mm, s:null, pk, kind:'pack', packs:1}; return renderSheet(); }
+  const s = sizeId ? Object.values(mm.sizes || {}).find(z => z.id === sizeId) : null;
+  SH = {p, mm, s, kind:mm.type === 'PIECE_ACTUAL_WEIGHT' ? 'pcs' : 'kg', kg:1, pcs:1};
+  renderSheet();
+}
+function renderSheet() {
+  let ov = $('#shov'); if (!ov) { ov = document.createElement('div'); ov.id = 'shov'; ov.className = 'shov'; ov.addEventListener('click', e => { if (e.target === ov) closeSheet(); }); document.body.appendChild(ov); document.body.style.overflow = 'hidden'; }
+  if (SH.kind === 'pack') { const {p, pk} = SH, total = r2(SH.packs * pk.price);
+    ov.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="เลือกสินค้า">
+      <div style="display:flex;align-items:flex-start;gap:10px"><div style="flex:1"><div style="font-size:18px;font-weight:700">${esc(p.name)}</div><div style="color:var(--ink-2)">📦 ${esc(pk.name)} · ${baht(pk.price)}/แพ็ค</div></div><button class="back" onclick="closeSheet()" aria-label="ปิด">✕</button></div>
+      <div style="margin-top:16px;font-weight:600">จำนวนแพ็ค</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:8px"><div class="stepper"><button onclick="SH.packs=Math.max(1,SH.packs-1);renderSheet()" aria-label="ลด">−</button><span class="num">${SH.packs} แพ็ค</span><button onclick="SH.packs=Math.min(50,SH.packs+1);renderSheet()" aria-label="เพิ่ม">+</button></div>${pk.g ? `<span class="note" style="margin:0">แพ็คละประมาณ ${fmtG(pk.g)}</span>` : ''}</div>
+      <div class="pc-row" style="margin-top:14px"><span style="flex:1;color:var(--ink-2)">${SH.packs} แพ็ค × ${baht(pk.price)}</span><b class="num" style="font-size:18px">${baht(total)}</b></div>
+      <p class="note" style="text-align:left;margin:8px 0 0">ราคาคงที่ต่อแพ็ค</p>
+      <button class="cartbar" style="justify-content:center;margin-top:14px;border:0;cursor:pointer;font-size:16px" onclick="addFromSheet()">เพิ่มลงตะกร้า · ${baht(total)}</button></div>`;
+    return; }
+  const {p, mm, s, kind} = SH, price = s ? s.price : mm.price;
+  const est = kind === 'pcs' ? (p.avg_piece_g || 0) : 0, total = kind === 'pcs' ? r2(SH.pcs * est / 1000 * price) : r2(SH.kg * price);
+  ov.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="เลือกสินค้า">
+    <div style="display:flex;align-items:flex-start;gap:10px"><div style="flex:1"><div style="font-size:18px;font-weight:700">${esc(p.name)}</div><div style="color:var(--ink-2)">${esc(s ? 'ตามไซซ์ · ' + s.grade : mm.name)} · ${baht(price)}/kg</div></div><button class="back" onclick="closeSheet()" aria-label="ปิด">✕</button></div>
+    ${kind === 'kg' ? `<div style="margin-top:16px;font-weight:600">น้ำหนักที่ต้องการ</div>
+      <div class="kgchips" style="margin-top:8px">${[0.5, 1, 2, 3].map(k => `<button class="${SH.kg === k ? 'on' : ''}" onclick="SH.kg=${k};renderSheet()">${k}${k === 3 ? ' kg' : ''}</button>`).join('')}</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:12px"><div class="stepper"><button onclick="SH.kg=Math.max(${KG_MIN},r2(SH.kg-${KG_STEP}));renderSheet()" aria-label="ลด">−</button><span class="num">${kgTxt(SH.kg)}</span><button onclick="SH.kg=Math.min(${KG_MAX},r2(SH.kg+${KG_STEP}));renderSheet()" aria-label="เพิ่ม">+</button></div><span class="note" style="margin:0">ปรับทีละ 0.5 kg</span></div>`
+    : `<div style="margin-top:16px;font-weight:600">จำนวนตัว</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:8px"><div class="stepper"><button onclick="SH.pcs=Math.max(1,SH.pcs-1);renderSheet()" aria-label="ลด">−</button><span class="num">${SH.pcs} ตัว</span><button onclick="SH.pcs=Math.min(50,SH.pcs+1);renderSheet()" aria-label="เพิ่ม">+</button></div>${est ? `<span class="note" style="margin:0">ตัวละประมาณ ${fmtG(est)}</span>` : ''}</div>`}
+    <div class="pc-row" style="margin-top:14px"><span style="flex:1;color:var(--ink-2)">${kind === 'kg' ? `${kgTxt(SH.kg)} × ${baht(price)}` : `${SH.pcs} ตัว × น้ำหนักจริง × ${baht(price)}/kg`}</span><b class="num" style="font-size:18px">${kind === 'pcs' ? (est ? '≈ ' + baht(total) : 'คิดตามน้ำหนักจริง') : baht(total)}</b></div>
+    <p class="note" style="text-align:left;margin:8px 0 0">ราคาจริงคิดตามน้ำหนักที่ชั่งตอนแพ็ก</p>
+    <button class="cartbar" style="justify-content:center;margin-top:14px;border:0;cursor:pointer;font-size:16px" onclick="addFromSheet()">เพิ่มลงตะกร้า${kind === 'kg' || est ? ' · ' + (kind === 'pcs' ? '≈ ' : '') + baht(total) : ''}</button></div>`;
+}
+function closeSheet() { $('#shov')?.remove(); document.body.style.overflow = ''; SH = null; }
+function addFromSheet() {
+  if (SH.kind === 'pack') { const {p, mm, pk} = SH, same = CART.find(it => it.kind === 'pack' && it.slug === p.slug && it.pack_id === pk.id);
+    if (same) same.packs = Math.min(50, same.packs + SH.packs);
+    else CART.push({id:'c' + Date.now(), kind:'pack', slug:p.slug, product:p.name, method_id:mid(mm, methods(p).indexOf(mm)), method_name:mm.name, method_type:'PACK', pack_id:pk.id, pack_name:pk.name, pack_g:pk.g || 0, price:pk.price, packs:SH.packs});
+    saveCart(); closeSheet(); toastMsg('เพิ่มลงตะกร้าแล้ว'); rerender(); return; }
+  const {p, mm, s, kind} = SH, base = {slug:p.slug, product:p.name, method_id:mid(mm, methods(p).indexOf(mm)), method_name:mm.name, method_type:mm.type, size_id:s ? s.id : '', grade:s ? s.grade : '', price_kg:s ? s.price : mm.price};
+  const same = CART.find(it => it.kind === kind && it.slug === base.slug && it.method_id === base.method_id && (it.size_id || '') === base.size_id);
+  if (kind === 'kg') { if (same) same.kg = Math.min(KG_MAX, r2(same.kg + SH.kg)); else CART.push({id:'c' + Date.now(), kind, ...base, kg:SH.kg}); }
+  else { if (same) same.pcs = Math.min(50, same.pcs + SH.pcs); else CART.push({id:'c' + Date.now(), kind, ...base, pcs:SH.pcs, est_g:p.avg_piece_g || 0}); }
+  saveCart(); closeSheet(); toastMsg('เพิ่มลงตะกร้าแล้ว'); rerender();
+}
+function addPiece(slug, k) {
+  const p = CAT.list.find(x => x.slug === slug), x = p && pieces(p).find(z => z.k === k); if (!x || inCart(k)) return;
+  const mm = methods(p).find((z, i) => mid(z, i) === p.pieces_by_id) || methods(p).find(z => z.name === p.pieces_by) || {};
+  CART.push({id:'c' + Date.now(), kind:'piece', slug, product:p.name, method_id:p.pieces_by_id || mm.id || '', method_name:p.pieces_by || mm.name || 'ขายเป็นตัว', method_type:mm.type || 'PIECE_ACTUAL_WEIGHT', piece_k:k, g:x.g, grade:x.grade || '', price_kg:mm.price || 0, price:x.price});
+  saveCart(); toastMsg('เพิ่มลงตะกร้าแล้ว'); rerender();
+}
+function changeQty(id, d) { const it = CART.find(z => z.id === id); if (!it) return;
+  if (it.kind === 'kg') it.kg = Math.min(KG_MAX, Math.max(KG_MIN, r2(it.kg + d * KG_STEP))); else if (it.kind === 'pcs') it.pcs = Math.min(50, Math.max(1, it.pcs + d)); else if (it.kind === 'pack') it.packs = Math.min(50, Math.max(1, it.packs + d));
+  saveCart(); rerender(); }
+function removeItem(id) { CART = CART.filter(z => z.id !== id); saveCart(); rerender(); }
+function clearCart() { if (!confirm('ล้างรายการทั้งหมดในตะกร้า?')) return; CART = []; saveCart(); rerender(); }
+const itemLabel = it => it.kind === 'pack' ? `📦 ${it.pack_name}` : it.kind === 'piece' ? `${it.method_name} · ตัว ${fmtG(it.g)}${it.grade ? ' ' + it.grade : ''}` : it.grade ? `ตามไซซ์ · ${it.grade}` : it.method_name;
+const itemQtyTxt = it => it.kind === 'pack' ? `${it.packs} แพ็ค × ${baht(it.price)}` : it.kind === 'piece' ? `${fmtG(it.g)} · ${baht(it.price)}` : it.kind === 'pcs' ? `${it.pcs} ตัว × น้ำหนักจริง × ${baht(it.price_kg)}/kg` : `${kgTxt(it.kg)} × ${baht(it.price_kg)}`;
+function orderMessage() {
+  const L = CART.map((it, i) => `${i + 1}) ${it.product} · ${itemLabel(it)}${it.kind === 'kg' ? ` · ${kgTxt(it.kg)} × ${baht(it.price_kg)}` : it.kind === 'pack' ? ` · ${it.packs} แพ็ค × ${baht(it.price)}` : it.kind === 'pcs' ? ` · ${it.pcs} ตัว (${baht(it.price_kg)}/kg)` : ''} = ${it.kind === 'pcs' && !it.est_g ? 'ตามน้ำหนักจริง' : (it.kind === 'pcs' ? '≈ ' : '') + baht(lineTotal(it))}`);
+  return ['สวัสดีค่ะ ขอสั่งซื้อตามรายการนี้', ...L, `ยอดสินค้า ${cartHasEst() ? '≈ ' : ''}${baht(cartTotal())} (${CART.length} รายการ)`, 'ค่าส่งและยอดสุทธิรอร้านยืนยันค่ะ'].join('\n');
+}
+function cartBar() { return CART.length ? `<a class="cartbar" href="?cart=1" data-nav><span>🛒 ${CART.length} รายการ · ${cartHasEst() ? '≈ ' : ''}${baht(cartTotal())}</span><span class="grow"></span><span>ดูตะกร้า ›</span></a>` : ''; }
+let TOAST_T = null;
+function toastMsg(t) { let el = $('#mtoast'); if (!el) { el = document.createElement('div'); el.id = 'mtoast'; el.style.cssText = 'position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--navy);color:#fff;padding:10px 16px;border-radius:12px;z-index:60;font-weight:600;font-size:14px'; document.body.appendChild(el); }
+  el.textContent = t; el.style.display = 'block'; clearTimeout(TOAST_T); TOAST_T = setTimeout(() => el.style.display = 'none', 1600); }
+function rerender() { const y = scrollY; render(); scrollTo(0, y); }
+function vCart() {
+  document.title = 'ตะกร้าของฉัน · ' + (CAT.meta.name || 'ไต้ก๋ง ซีฟู้ด');
+  const u = CART.length ? lineUrl(orderMessage()) : '';
+  return `${topbar(true)}<main class="wrap" style="max-width:720px"><h2 class="sec" style="margin-top:16px">🛒 ตะกร้าของฉัน</h2>
+    ${CART_NOTICE ? `<div class="notice">${esc(CART_NOTICE)}</div>` : ''}
+    ${CART.length ? `<div class="pieces" style="margin-top:12px">${CART.map(it => `<div class="citem"><div style="flex:1;min-width:0"><b>${esc(it.product)}</b><div class="small" style="color:var(--ink-2)">${esc(itemLabel(it))}</div>
+        ${it.kind === 'piece' ? `<div class="small" style="color:var(--ink-3);margin-top:4px">เลือกตัวนี้แล้ว</div>` : `<div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap"><div class="stepper"><button onclick="changeQty('${it.id}',-1)" aria-label="ลด">−</button><span class="num">${it.kind === 'kg' ? kgTxt(it.kg) : it.kind === 'pack' ? it.packs + ' แพ็ค' : it.pcs + ' ตัว'}</span><button onclick="changeQty('${it.id}',1)" aria-label="เพิ่ม">+</button></div><span class="small" style="color:var(--ink-3)">${it.kind === 'pack' ? `× ${baht(it.price)}/แพ็ค` : `× ${baht(it.price_kg)}/kg${it.kind === 'pcs' ? ' · คิดตามน้ำหนักจริง' : ''}`}</span></div>`}</div>
+        <div style="text-align:right;flex:none"><b class="num">${it.kind === 'pcs' && !it.est_g ? 'ตามน้ำหนักจริง' : (it.kind === 'pcs' ? '≈ ' : '') + baht(lineTotal(it))}</b><div><button class="rm" onclick="removeItem('${it.id}')">ลบ</button></div></div></div>`).join('')}</div>
+      <div class="box"><div style="display:flex"><span style="color:var(--ink-2)">จำนวน</span><span style="margin-left:auto">${CART.length} รายการ</span></div>
+        <div style="display:flex;align-items:baseline;margin-top:6px"><b>ยอดสินค้า</b><b class="num" style="margin-left:auto;font-size:22px;color:var(--blue)">${cartHasEst() ? '≈ ' : ''}${baht(cartTotal())}</b></div>
+        <p class="note" style="text-align:left;margin:8px 0 0">ค่าส่งและยอดสุทธิจะยืนยันอีกครั้งก่อนชำระเงิน</p></div>
+      ${u ? `<a class="linebtn lg" style="margin-top:14px" href="${esc(u)}" target="_blank" rel="noopener">${LINE_SVG} ส่งรายการสั่งซื้อ</a><p class="note">ระบบจะเปิด LINE พร้อมรายการทั้งหมด · ร้านจะยืนยันยอดและค่าส่งให้</p>` : ''}
+      <div style="display:flex;gap:10px;margin-top:10px"><a class="wsbtn" href="?c=all" data-nav style="flex:1">＋ เลือกสินค้าเพิ่ม</a><button class="wsbtn" style="flex:none;width:auto;padding:0 16px;border-color:var(--line);color:var(--red);cursor:pointer" onclick="clearCart()">ล้างตะกร้า</button></div>`
+    : `<div class="empty">ตะกร้ายังว่าง<br><span style="font-size:13px">เลือกสินค้าแล้วกด "เพิ่มลงตะกร้า"</span><br><br><a class="chip on" href="?c=all" data-nav>ดูสินค้าทั้งหมด</a></div>`}
+  </main>`;
+}
 
 /* ---------- Views ---------- */
 function vHome() {
@@ -268,36 +403,40 @@ function vDetail(slug) {
   document.title = `${title(p)} · ${m.name || 'ไต้ก๋ง ซีฟู้ด'}`;
   setTimeout(async () => { if (!p.image_v) return; const el = $('#dimg'); const th = await getImg(p.slug, 'thumb', p.image_v); if (th && el && !el.dataset.full) el.insertAdjacentHTML('beforeend', `<img class="lq" src="${th}" alt="">`);
     const lg = await getImg(p.slug, 'large', p.image_v); if (lg && el) { el.dataset.full = 1; el.innerHTML = `<img src="${lg}" alt="${esc(p.name)}">`; } }, 0);
-  const ctas = `${lineBtn(MSG_ORDER(p), 'lg')}${wsBtn(p)}`;
+  const ask = lineUrl(MSG_ORDER(p));
+  const ctas = CART.length ? `${cartBar()}<div class="minirow">${ask ? `<a class="wsbtn" href="${esc(ask)}" target="_blank" rel="noopener">💬 สอบถาม LINE</a>` : ''}${wsBtn(p)}</div>` : `${lineBtn(MSG_ORDER(p), 'lg')}${wsBtn(p)}`;
   return `${topbar(true)}<main class="wrap d">
     <div class="dimg" id="dimg">${CAT_EMOJI[p.category] || '🐟'}</div>
     <div>
       <h1>${esc(p.name)}</h1>${p.size ? `<div class="sz">${esc(p.size)}</div>` : ''}${gradeHtml(p) ? `<div class="sz">${gradeHtml(p)}</div>` : ''}
       <span class="pill ${esc(p.status)}">${ST[p.status] || ''}</span>
       <div class="box"><h3>วิธีขาย · ราคาปลีก</h3><div class="pieces">${(methods(p).length ? methods(p) : [{name:'ราคาปลีก', type:'WEIGHT', price:p.retail_price}]).map(mm => { const ss = Object.values(mm.sizes || {});
+        if (mm.type === 'PACK') return `<div class="small" style="color:var(--ink-2);font-weight:600;margin-top:4px">${MT.PACK}${mm.name && mm.name !== 'ขายเป็นแพ็ค' ? ' · ' + esc(mm.name) : ''}</div>${packsOfM(mm).map(k => `<div class="pc-row" style="flex-wrap:wrap"><span style="flex:1;min-width:130px"><b>${esc(k.name)}</b><div class="small" style="color:var(--ink-3)">${k.g ? fmtG(k.g) + ' / แพ็ค' : ''}</div><div class="small"><span class="pill ${esc(k.status)}" style="margin:2px 0 0;font-size:11.5px;padding:1px 8px">${ST[k.status] || ''}</span></div></span><span class="pp num" style="flex:none">${baht(k.price)}<small style="color:var(--ink-3);font-weight:400"> / แพ็ค</small></span>${k.status !== 'soldout' ? `<button class="addbtn" onclick="openSheet('${esc(p.slug)}','${esc(mid(mm, methods(p).indexOf(mm)))}','${esc(k.id || '')}')">เลือกสินค้า</button>` : ''}</div>`).join('')}`;
         if (ss.length) return `<div class="small" style="color:var(--ink-2);font-weight:600;margin-top:4px">${MT[mm.type] || ''} ${mm.name && mm.name !== 'ตามไซซ์' ? '· ' + esc(mm.name) : ''}</div>${ss.map(s => { const u = lineUrl(MSG_SIZE(p, mm, s));
-          return `<div class="pc-row" style="flex-wrap:wrap"><span style="flex:1;min-width:130px"><b>${esc(s.grade)}</b><div class="small"><span class="pill ${esc(s.status)}" style="margin:2px 0 0;font-size:11.5px;padding:1px 8px">${ST[s.status] || ''}</span></div></span><span class="pp num" style="flex:none">${baht(s.price)}<small style="color:var(--ink-3);font-weight:400"> / kg</small></span>${u && s.status !== 'soldout' ? `<a class="linebtn" href="${esc(u)}" target="_blank" rel="noopener">${LINE_SVG} สั่งไซซ์นี้</a>` : ''}</div>`; }).join('')}`;
+          return `<div class="pc-row" style="flex-wrap:wrap"><span style="flex:1;min-width:130px"><b>${esc(s.grade)}</b><div class="small"><span class="pill ${esc(s.status)}" style="margin:2px 0 0;font-size:11.5px;padding:1px 8px">${ST[s.status] || ''}</span></div></span><span class="pp num" style="flex:none">${baht(s.price)}<small style="color:var(--ink-3);font-weight:400"> / kg</small></span>${s.status !== 'soldout' ? `<button class="addbtn" onclick="openSheet('${esc(p.slug)}','${esc(mid(mm, methods(p).indexOf(mm)))}','${esc(s.id || '')}')">เลือกสินค้า</button>` : ''}</div>`; }).join('')}`;
         const sized = new Set(methods(p).flatMap(x => Object.values(x.sizes || {}).map(s => s.grade)));   // ไซซ์ที่ขายในกล่อง "ตามไซซ์" แล้ว ไม่แสดงซ้ำ
         const u = lineUrl(MSG_METHOD(p, mm)), gs = mm.type === 'WEIGHT' ? (grades(p).length ? grades(p) : (p.size ? [p.size] : [])).filter(g => !sized.has(g)) : [];
         const fishHere = mm.type === 'WEIGHT' && pieces(p).length && p.pieces_by === mm.name;
-        return `<div class="pc-row" style="flex-wrap:wrap"><span style="flex:1;min-width:150px"><b>${esc(mm.name)}</b><div class="small" style="color:var(--ink-3)">${MT[mm.type] || ''}</div>${gs.length ? `<div class="small" style="margin-top:4px;color:var(--ink-2)">ไซซ์ที่มีตอนนี้: ${gs.map(g => `<span class="gchip">${esc(g)}</span>`).join(' ')}</div>` : ''}${fishHere ? `<div class="small" style="margin-top:4px;color:var(--green);font-weight:600">🐟 มีปลาชั่งรายตัว ${pieces(p).length} ตัว ให้เลือกด้านล่าง</div>` : ''}</span><span class="pp num" style="flex:none">${baht(mm.price)}<small style="color:var(--ink-3);font-weight:400"> / kg</small></span>${u ? `<a class="linebtn" href="${esc(u)}" target="_blank" rel="noopener">${LINE_SVG} สั่งแบบนี้</a>` : ''}</div>`; }).join('')}</div>
-        ${avgHtml(p) ? `<div class="avgw" style="margin-top:8px">${avgHtml(p)}</div>` : ''}<div class="note" style="text-align:left;margin-top:8px">ราคาคิดตามน้ำหนักจริง · ต้องการซื้อจำนวนมาก กด “🏷️ ขอราคาส่ง” เพื่อสอบถามทาง LINE</div></div>
-      ${pieces(p).length ? `<div class="box"><h3>🐟 เลือกตัวได้ (${pieces(p).length} ตัว)</h3><p class="note" style="text-align:left;margin:0 0 10px">ชั่งไว้แล้ว · ราคาต่อตัว = น้ำหนักจริง × ราคา${esc(p.pieces_by || 'ขายเป็นตัว')} ${(() => { const mm = methods(p).find(x => x.name === p.pieces_by); return mm ? baht(mm.price) + '/kg' : ''; })()}</p><div class="pieces">${pieces(p).map(x => { const u = lineUrl(MSG_PIECE(p, x)); return `<div class="pc-row"><span class="w num">${fmtG(x.g)}${x.grade && grades(p).length > 0 ? `<div style="font-weight:400;font-size:12px;color:var(--ink-3)">${esc(x.grade)}</div>` : ''}</span><span class="pp num">${baht(x.price)}</span>${u ? `<a class="linebtn" href="${esc(u)}" target="_blank" rel="noopener">${LINE_SVG} สั่งตัวนี้</a>` : ''}</div>`; }).join('')}</div></div>` : ''}
+        return `<div class="pc-row" style="flex-wrap:wrap"><span style="flex:1;min-width:150px"><b>${esc(mm.name)}</b><div class="small" style="color:var(--ink-3)">${MT[mm.type] || ''}</div>${gs.length ? `<div class="small" style="margin-top:4px;color:var(--ink-2)">ไซซ์ที่มีตอนนี้: ${gs.map(g => `<span class="gchip">${esc(g)}</span>`).join(' ')}</div>` : ''}${fishHere ? `<div class="small" style="margin-top:4px;color:var(--green);font-weight:600">🐟 มีปลาชั่งรายตัว ${pieces(p).length} ตัว ให้เลือกด้านล่าง</div>` : ''}</span><span class="pp num" style="flex:none">${baht(mm.price)}<small style="color:var(--ink-3);font-weight:400"> / kg</small></span>${p.status === 'soldout' ? '' : mm.type === 'PIECE_ACTUAL_WEIGHT' && pieces(p).length ? `<button class="addbtn" onclick="document.getElementById('fishbox').scrollIntoView({behavior:'smooth',block:'start'})">เลือกตัว ↓</button>` : `<button class="addbtn" onclick="openSheet('${esc(p.slug)}','${esc(mid(mm, methods(p).indexOf(mm)))}','')">เลือกสินค้า</button>`}</div>`; }).join('')}</div>
+        ${avgHtml(p) ? `<div class="avgw" style="margin-top:8px">${avgHtml(p)}</div>` : ''}<div class="note" style="text-align:left;margin-top:8px">${methods(p).some(x => x.type === 'PACK') ? (methods(p).every(x => x.type === 'PACK') ? 'ราคาคงที่ต่อแพ็ค' : 'แบบแพ็คราคาคงที่ต่อแพ็ค · แบบอื่นคิดตามน้ำหนักจริง') : 'ราคาคิดตามน้ำหนักจริง'} · ต้องการซื้อจำนวนมาก กด “🏷️ ขอราคาส่ง” เพื่อสอบถามทาง LINE</div></div>
+      ${pieces(p).length ? `<div class="box" id="fishbox" style="scroll-margin-top:90px"><h3>🐟 เลือกตัวได้ (${pieces(p).length} ตัว)</h3><p class="note" style="text-align:left;margin:0 0 10px">ชั่งไว้แล้ว · ราคาต่อตัว = น้ำหนักจริง × ราคา${esc(p.pieces_by || 'ขายเป็นตัว')} ${(() => { const mm = methods(p).find(x => x.name === p.pieces_by); return mm ? baht(mm.price) + '/kg' : ''; })()}</p><div class="pieces">${pieces(p).map(x => `<div class="pc-row"><span class="w num">${fmtG(x.g)}${x.grade && grades(p).length > 0 ? `<div style="font-weight:400;font-size:12px;color:var(--ink-3)">${esc(x.grade)}</div>` : ''}</span><span class="pp num">${baht(x.price)}</span>${x.k ? (inCart(x.k) ? '<span class="chosen">✓ เลือกแล้ว</span>' : `<button class="addbtn pri" onclick="addPiece('${esc(p.slug)}','${esc(x.k)}')">เพิ่มลงตะกร้า</button>`) : ''}</div>`).join('')}</div></div>` : ''}
       ${p.description ? `<div class="box"><h3>รายละเอียด</h3><div class="pre">${esc(p.description)}</div></div>` : ''}
       ${p.highlights.length ? `<div class="box"><h3>จุดเด่น</h3><ul class="hl">${p.highlights.map(h => `<li>${esc(h)}</li>`).join('')}</ul></div>` : ''}
       ${m.packing_text ? `<div class="box"><h3>📦 การแพ็ก</h3><div class="pre">${esc(m.packing_text)}</div></div>` : ''}
       ${ship ? `<div class="box"><h3>🚚 ค่าจัดส่ง</h3><div class="pre">${esc(ship)}</div></div>` : ''}
-      ${lineUrl('') ? `<div class="ctas">${ctas}${p.status === 'soldout' ? '<div class="note">สินค้าหมดชั่วคราว · ทักถามรอบเข้าของถัดไปได้</div>' : ''}</div>` : ''}
+      ${lineUrl('') || CART.length ? `<div class="ctas">${ctas}${p.status === 'soldout' ? '<div class="note">สินค้าหมดชั่วคราว · ทักถามรอบเข้าของถัดไปได้</div>' : ''}</div>` : ''}
     </div>
   </main>
-  ${lineUrl('') ? `<div class="sticky"><div class="in">${ctas}</div></div>` : ''}`;
+  ${lineUrl('') || CART.length ? `<div class="sticky"><div class="in">${ctas}</div></div>` : ''}`;
 }
 
 /* ---------- Router ---------- */
 function render() {
   const q = new URLSearchParams(location.search), app = $('#app');
   if (!q.get('p')) document.title = (CAT.meta.name || 'ไต้ก๋ง ซีฟู้ด') + ' · เมนูของทะเล';
-  app.innerHTML = q.get('p') ? vDetail(q.get('p')) : q.get('q') ? vSearch(q.get('q')) : q.get('c') ? vList(q.get('c')) : vHome();
+  if (!q.get('cart')) CART_NOTICE = '';
+  app.innerHTML = q.get('cart') ? vCart() : q.get('p') ? vDetail(q.get('p')) : q.get('q') ? vSearch(q.get('q')) : q.get('c') ? vList(q.get('c')) : vHome();
+  if (CART.length && !q.get('cart') && !q.get('p')) app.insertAdjacentHTML('beforeend', `<div class="floatbar"><div class="in">${cartBar()}</div></div>`);
   lazyImages();
 }
 let ST_T = null;
@@ -312,10 +451,11 @@ function onSearch(v) {
 function nav(href) { history.pushState({}, '', href); render(); scrollTo(0, 0); }
 function goBack() { if (history.state && history.length > 1) history.back(); else nav('./'); }
 document.addEventListener('click', e => { const a = e.target.closest('a[data-nav]'); if (!a || e.metaKey || e.ctrlKey) return; e.preventDefault(); nav(a.getAttribute('href')); });
-addEventListener('popstate', render);
-document.addEventListener('visibilitychange', async () => { if (!document.hidden && CAT && Date.now() - LOADED_AT > 60000) { try { await load(); const y = scrollY; const f = document.activeElement && document.activeElement.id === 'q'; render(); scrollTo(0, y); if (f) $('#q').focus(); } catch (e) {} } });
+addEventListener('popstate', () => { closeSheet(); render(); });
+addEventListener('keydown', e => { if (e.key === 'Escape' && SH) closeSheet(); });
+document.addEventListener('visibilitychange', async () => { if (!document.hidden && CAT && Date.now() - LOADED_AT > 60000) { try { await load(); reconcileCart(); const y = scrollY; const f = document.activeElement && document.activeElement.id === 'q'; render(); scrollTo(0, y); if (f) $('#q').focus(); } catch (e) {} } });
 (async function start() {
-  try { await load(); render(); }
+  try { await load(); reconcileCart(); render(); }
   catch (e) { $('#app').innerHTML = `<div class="wrap"><div class="empty">โหลดเมนูไม่สำเร็จ<br><span style="font-size:13px">ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่</span><br><br><button class="chip on" onclick="location.reload()">ลองใหม่</button></div></div>`; }
 })();
 </script>
