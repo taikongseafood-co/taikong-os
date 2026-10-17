@@ -345,7 +345,9 @@ const itemLabel = it => it.kind === 'pack' ? `📦 ${it.pack_name}` : it.kind ==
 const itemQtyTxt = it => it.kind === 'pack' ? `${it.packs} แพ็ค × ${baht(it.price)}` : it.kind === 'piece' ? `${fmtG(it.g)} · ${baht(it.price)}` : it.kind === 'pcs' ? `${it.pcs} ตัว × น้ำหนักจริง × ${baht(it.price_kg)}/kg` : `${kgTxt(it.kg)} × ${baht(it.price_kg)}`;
 function orderMessage() {
   const L = CART.map((it, i) => `${i + 1}) ${it.product} · ${itemLabel(it)}${it.kind === 'kg' ? ` · ${kgTxt(it.kg)} × ${baht(it.price_kg)}` : it.kind === 'pack' ? ` · ${it.packs} แพ็ค × ${baht(it.price)}` : it.kind === 'pcs' ? ` · ${it.pcs} ตัว (${baht(it.price_kg)}/kg)` : ''} = ${it.kind === 'pcs' && !it.est_g ? 'ตามน้ำหนักจริง' : (it.kind === 'pcs' ? '≈ ' : '') + baht(lineTotal(it))}`);
-  return ['สวัสดีค่ะ ขอสั่งซื้อตามรายการนี้', ...L, `ยอดสินค้า ${cartHasEst() ? '≈ ' : ''}${baht(cartTotal())} (${CART.length} รายการ)`, 'ค่าส่งและยอดสุทธิรอร้านยืนยันค่ะ'].join('\n');
+  const fee = +((CAT && CAT.meta) || {}).shipping_fee || 0;   // ค่าส่งจาก Settings หลังบ้าน
+  return ['สนใจและต้องการสั่งซื้อสินค้า ตามรายการดังนี้', '', L.join('\n\n'), '', `ยอดสินค้า ${cartHasEst() ? '≈ ' : ''}${baht(cartTotal())} (${CART.length} รายการ)`,
+    fee > 0 ? `ค่าจัดส่ง ${fee.toLocaleString('th-TH')} บาท ทั่วประเทศ` : '', fee > 0 ? `ยอดรวมทั้งหมด (รวมค่าส่ง) ${cartHasEst() ? '≈ ' : ''}${baht(r2(cartTotal() + fee))}` : '', 'รบกวนรอทางแอดมินตอบกลับเพื่อยืนยันออเดอร์อีกครั้ง'].filter((x, i, a) => x !== '' || (i > 0 && a[i - 1] !== '')).join('\n');
 }
 function cartBar() { return CART.length ? `<a class="cartbar" href="?cart=1" data-nav><span>🛒 ${CART.length} รายการ · ${cartHasEst() ? '≈ ' : ''}${baht(cartTotal())}</span><span class="grow"></span><span>ดูตะกร้า ›</span></a>` : ''; }
 let TOAST_T = null;
@@ -362,7 +364,7 @@ function vCart() {
         <div style="text-align:right;flex:none"><b class="num">${it.kind === 'pcs' && !it.est_g ? 'ตามน้ำหนักจริง' : (it.kind === 'pcs' ? '≈ ' : '') + baht(lineTotal(it))}</b><div><button class="rm" onclick="removeItem('${it.id}')">ลบ</button></div></div></div>`).join('')}</div>
       <div class="box"><div style="display:flex"><span style="color:var(--ink-2)">จำนวน</span><span style="margin-left:auto">${CART.length} รายการ</span></div>
         <div style="display:flex;align-items:baseline;margin-top:6px"><b>ยอดสินค้า</b><b class="num" style="margin-left:auto;font-size:22px;color:var(--blue)">${cartHasEst() ? '≈ ' : ''}${baht(cartTotal())}</b></div>
-        <p class="note" style="text-align:left;margin:8px 0 0">ค่าส่งและยอดสุทธิจะยืนยันอีกครั้งก่อนชำระเงิน</p></div>
+        ${+CAT.meta.shipping_fee > 0 ? `<div style="display:flex;margin-top:6px"><span style="color:var(--ink-2)">ค่าจัดส่ง</span><span style="margin-left:auto">${baht(CAT.meta.shipping_fee)} ทั่วประเทศ</span></div><div style="display:flex;align-items:baseline;margin-top:6px;padding-top:6px;border-top:1px dashed var(--line)"><b>ยอดรวมทั้งหมด (รวมค่าส่ง)</b><b class="num" style="margin-left:auto;font-size:18px">${cartHasEst() ? '≈ ' : ''}${baht(r2(cartTotal() + +CAT.meta.shipping_fee))}</b></div>` : ''}<p class="note" style="text-align:left;margin:8px 0 0">ค่าส่งและยอดสุทธิจะยืนยันอีกครั้งก่อนชำระเงิน</p></div>
       ${u ? `<a class="linebtn lg" style="margin-top:14px" href="${esc(u)}" target="_blank" rel="noopener">${LINE_SVG} ส่งรายการสั่งซื้อ</a><p class="note">ระบบจะเปิด LINE พร้อมรายการทั้งหมด · ร้านจะยืนยันยอดและค่าส่งให้</p>` : ''}
       <div style="display:flex;gap:10px;margin-top:10px"><a class="wsbtn" href="?c=all" data-nav style="flex:1">＋ เลือกสินค้าเพิ่ม</a><button class="wsbtn" style="flex:none;width:auto;padding:0 16px;border-color:var(--line);color:var(--red);cursor:pointer" onclick="clearCart()">ล้างตะกร้า</button></div>`
     : `<div class="empty">ตะกร้ายังว่าง<br><span style="font-size:13px">เลือกสินค้าแล้วกด "เพิ่มลงตะกร้า"</span><br><br><a class="chip on" href="?c=all" data-nav>ดูสินค้าทั้งหมด</a></div>`}
