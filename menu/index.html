@@ -274,24 +274,41 @@ const mid = (mm, i) => mm.id || 'm' + i;
 const findMethod = (p, id) => methods(p).find((x, i) => mid(x, i) === id);
 /* ตรวจตะกร้ากับเมนูล่าสุด: ราคาเปลี่ยนตาม · ของที่หมด/ถูกนำออก เอาออกและแจ้งลูกค้า */
 function reconcileCart() {
-  const gone = [];
+  const gone = [], cut = [];
   CART = CART.filter(it => {
     const p = CAT.list.find(x => x.slug === it.slug); if (!p) { gone.push(it.product); return false; }
     if (it.kind === 'piece') { const x = pieces(p).find(z => z.k === it.piece_k); if (!x) { gone.push(`${it.product} ตัว ${fmtG(it.g)}`); return false; } it.price = x.price; it.g = x.g; return true; }
     const mm = findMethod(p, it.method_id); if (!mm) { gone.push(it.product); return false; }
-    if (it.kind === 'pack') { const k = packsOfM(mm).find(z => z.id === it.pack_id); if (!k || k.status === 'soldout') { gone.push(`${it.product} ${it.pack_name}`); return false; } it.price = k.price; it.pack_name = k.name; it.pack_g = k.g; return true; }
+    if (it.kind === 'pack') { const k = packsOfM(mm).find(z => z.id === it.pack_id); if (!k || k.status === 'soldout' || capPk(it) < 1) { gone.push(`${it.product} ${it.pack_name}`); return false; } it.price = k.price; it.pack_name = k.name; it.pack_g = k.g;
+      if (it.packs > capPk(it)) { it.packs = capPk(it); cut.push(`${it.product} ${it.pack_name} เหลือ ${it.packs} แพ็ค`); } return true; }
     if (it.size_id) { const s = Object.values(mm.sizes || {}).find(z => z.id === it.size_id); if (!s || s.status === 'soldout') { gone.push(`${it.product} ${it.grade}`); return false; } it.price_kg = s.price; it.grade = s.grade; }
     else it.price_kg = mm.price;
     if (it.kind === 'pcs') it.est_g = p.avg_piece_g || 0;
+    if (it.kind === 'kg') { const c = capKg(it); if (c < KG_MIN) { gone.push(`${it.product}${it.grade ? ' ' + it.grade : ''}`); return false; } if (it.kg > c) { it.kg = c; cut.push(`${it.product}${it.grade ? ' ' + it.grade : ''} เหลือ ${kgTxt(c)}`); } }
     return true; });
-  if (gone.length) { CART_NOTICE = 'นำออกจากตะกร้าเพราะสินค้าหมดแล้ว: ' + gone.join(', '); saveCart(); }
+  if (gone.length || cut.length) { CART_NOTICE = [gone.length ? 'นำออกจากตะกร้าเพราะสินค้าหมดแล้ว: ' + gone.join(', ') : '', cut.length ? 'ปรับจำนวนตามสินค้าที่เหลือ: ' + cut.join(', ') : ''].filter(Boolean).join(' · '); saveCart(); }
 }
+/* จำนวนที่สั่งได้ตามสต็อก (จากหลังบ้าน) · null = ไม่จำกัด */
+function capOf(it) {
+  const p = CAT.list.find(x => x.slug === it.slug), mm = p && findMethod(p, it.method_id); if (!mm) return null;
+  if (it.kind === 'pack') { const k = packsOfM(mm).find(z => z.id === it.pack_id); return k && k.avail != null ? Math.max(0, +k.avail) : null; }
+  if (it.kind !== 'kg') return null;
+  const s = it.size_id ? Object.values(mm.sizes || {}).find(z => z.id === it.size_id) : null, g = s ? s.avail_g : mm.avail_g;
+  return g == null ? null : Math.min(KG_MAX, Math.floor(+g / 500) * 0.5);
+}
+const capKg = it => { const c = capOf(it); return c == null ? KG_MAX : c; };
+const capPk = it => { const c = capOf(it); return c == null ? 50 : c; };
+const leftHtml = (v, u) => v == null ? '' : `<span style="color:var(--ink-3);margin-left:6px">เหลือ ${u === 'แพ็ค' ? v + ' แพ็ค' : fmtG(+v)}</span>`;
 let SH = null;
 function openSheet(slug, methodId, sizeId) {
   const p = CAT.list.find(x => x.slug === slug), mm = p && findMethod(p, methodId); if (!mm) return;
-  if (mm.type === 'PACK') { const pk = packsOfM(mm).find(z => z.id === sizeId) || packsOfM(mm)[0]; if (!pk) return; SH = {p, mm, s:null, pk, kind:'pack', packs:1}; return renderSheet(); }
+  if (mm.type === 'PACK') { const pk = packsOfM(mm).find(z => z.id === sizeId) || packsOfM(mm)[0]; if (!pk) return; const key = {slug:p.slug, kind:'pack', method_id:mid(mm, methods(p).indexOf(mm)), pack_id:pk.id}, have = (CART.find(it => it.kind === 'pack' && it.slug === p.slug && it.pack_id === pk.id) || {}).packs || 0;
+    const room = capPk(key) - have; SH = {p, mm, s:null, pk, kind:'pack', packs:Math.min(1, Math.max(0, room)), room, have}; return renderSheet(); }
   const s = sizeId ? Object.values(mm.sizes || {}).find(z => z.id === sizeId) : null;
-  SH = {p, mm, s, kind:mm.type === 'PIECE_ACTUAL_WEIGHT' ? 'pcs' : 'kg', kg:1, pcs:1};
+  const kind = mm.type === 'PIECE_ACTUAL_WEIGHT' ? 'pcs' : 'kg', key = {slug:p.slug, kind, method_id:mid(mm, methods(p).indexOf(mm)), size_id:s ? s.id : ''};
+  const have = kind === 'kg' ? (CART.find(it => it.kind === 'kg' && it.slug === p.slug && it.method_id === key.method_id && (it.size_id || '') === key.size_id) || {}).kg || 0 : 0;
+  const room = kind === 'kg' ? r2(capKg(key) - have) : KG_MAX;
+  SH = {p, mm, s, kind, kg:Math.min(1, Math.max(0, room)), pcs:1, room, have, left:kind === 'kg' ? (s ? s.avail_g : mm.avail_g) : null};
   renderSheet();
 }
 function renderSheet() {
@@ -299,34 +316,37 @@ function renderSheet() {
   if (SH.kind === 'pack') { const {p, pk} = SH, total = r2(SH.packs * pk.price);
     ov.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="เลือกสินค้า">
       <div style="display:flex;align-items:flex-start;gap:10px"><div style="flex:1"><div style="font-size:18px;font-weight:700">${esc(p.name)}</div><div style="color:var(--ink-2)">📦 ${esc(pk.name)} · ${baht(pk.price)}/แพ็ค</div></div><button class="back" onclick="closeSheet()" aria-label="ปิด">✕</button></div>
-      <div style="margin-top:16px;font-weight:600">จำนวนแพ็ค</div>
-      <div style="display:flex;align-items:center;gap:10px;margin-top:8px"><div class="stepper"><button onclick="SH.packs=Math.max(1,SH.packs-1);renderSheet()" aria-label="ลด">−</button><span class="num">${SH.packs} แพ็ค</span><button onclick="SH.packs=Math.min(50,SH.packs+1);renderSheet()" aria-label="เพิ่ม">+</button></div>${pk.g ? `<span class="note" style="margin:0">แพ็คละประมาณ ${fmtG(pk.g)}</span>` : ''}</div>
+      ${SH.room < 1 ? '' : `<div style="margin-top:16px;font-weight:600">จำนวนแพ็ค</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:8px"><div class="stepper"><button onclick="SH.packs=Math.max(1,SH.packs-1);renderSheet()" aria-label="ลด">−</button><span class="num">${SH.packs} แพ็ค</span><button onclick="SH.packs=Math.min(SH.room,SH.packs+1);renderSheet()" aria-label="เพิ่ม" ${SH.packs >= SH.room ? 'disabled style="opacity:.35"' : ''}>+</button></div>${pk.g ? `<span class="note" style="margin:0">แพ็คละประมาณ ${fmtG(pk.g)}</span>` : ''}</div>
+      ${pk.avail != null ? `<p class="note" style="text-align:left;margin:8px 0 0">เหลือ ${pk.avail} แพ็ค${SH.have ? ` · ในตะกร้าแล้ว ${SH.have} แพ็ค` : ''}</p>` : ''}
       <div class="pc-row" style="margin-top:14px"><span style="flex:1;color:var(--ink-2)">${SH.packs} แพ็ค × ${baht(pk.price)}</span><b class="num" style="font-size:18px">${baht(total)}</b></div>
-      <p class="note" style="text-align:left;margin:8px 0 0">ราคาคงที่ต่อแพ็ค</p>
-      <button class="cartbar" style="justify-content:center;margin-top:14px;border:0;cursor:pointer;font-size:16px" onclick="addFromSheet()">เพิ่มลงตะกร้า · ${baht(total)}</button></div>`;
+      <p class="note" style="text-align:left;margin:8px 0 0">ราคาคงที่ต่อแพ็ค</p>`}
+      ${SH.room < 1 ? `<div class="notice" style="margin-top:14px">${SH.have ? 'ในตะกร้ามีครบจำนวนที่เหลือแล้ว' : 'สินค้าหมด'} · ต้องการเพิ่มทักแอดมินทาง LINE ได้เลยค่ะ</div>` : `<button class="cartbar" style="justify-content:center;margin-top:14px;border:0;cursor:pointer;font-size:16px" onclick="addFromSheet()">เพิ่มลงตะกร้า · ${baht(total)}</button>`}</div>`;
     return; }
   const {p, mm, s, kind} = SH, price = s ? s.price : mm.price;
   const est = kind === 'pcs' ? (p.avg_piece_g || 0) : 0, total = kind === 'pcs' ? r2(SH.pcs * est / 1000 * price) : r2(SH.kg * price);
   ov.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="เลือกสินค้า">
     <div style="display:flex;align-items:flex-start;gap:10px"><div style="flex:1"><div style="font-size:18px;font-weight:700">${esc(p.name)}</div><div style="color:var(--ink-2)">${esc(s ? 'ตามไซซ์ · ' + s.grade : mm.name)} · ${baht(price)}/kg</div></div><button class="back" onclick="closeSheet()" aria-label="ปิด">✕</button></div>
-    ${kind === 'kg' ? `<div style="margin-top:16px;font-weight:600">น้ำหนักที่ต้องการ</div>
-      <div class="kgchips" style="margin-top:8px">${[0.5, 1, 2, 3].map(k => `<button class="${SH.kg === k ? 'on' : ''}" onclick="SH.kg=${k};renderSheet()">${k}${k === 3 ? ' kg' : ''}</button>`).join('')}</div>
-      <div style="display:flex;align-items:center;gap:10px;margin-top:12px"><div class="stepper"><button onclick="SH.kg=Math.max(${KG_MIN},r2(SH.kg-${KG_STEP}));renderSheet()" aria-label="ลด">−</button><span class="num">${kgTxt(SH.kg)}</span><button onclick="SH.kg=Math.min(${KG_MAX},r2(SH.kg+${KG_STEP}));renderSheet()" aria-label="เพิ่ม">+</button></div><span class="note" style="margin:0">ปรับทีละ 0.5 kg</span></div>`
+    ${kind === 'kg' && SH.room < KG_MIN ? (SH.left != null ? `<p class="note" style="text-align:left;margin:12px 0 0">เหลือ ${fmtG(+SH.left)}${SH.have ? ` · ในตะกร้าแล้ว ${kgTxt(SH.have)}` : ''}</p>` : '') : kind === 'kg' ? `<div style="margin-top:16px;font-weight:600">น้ำหนักที่ต้องการ</div>
+      <div class="kgchips" style="margin-top:8px">${[0.5, 1, 2, 3].filter(k => k <= SH.room).map(k => `<button class="${SH.kg === k ? 'on' : ''}" onclick="SH.kg=${k};renderSheet()">${k}${k === 3 ? ' kg' : ''}</button>`).join('')}</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:12px"><div class="stepper"><button onclick="SH.kg=Math.max(${KG_MIN},r2(SH.kg-${KG_STEP}));renderSheet()" aria-label="ลด">−</button><span class="num">${kgTxt(SH.kg)}</span><button onclick="SH.kg=Math.min(SH.room,r2(SH.kg+${KG_STEP}));renderSheet()" aria-label="เพิ่ม" ${SH.kg >= SH.room ? 'disabled style="opacity:.35"' : ''}>+</button></div><span class="note" style="margin:0">ปรับทีละ 0.5 kg</span></div>
+      ${SH.left != null ? `<p class="note" style="text-align:left;margin:8px 0 0">เหลือ ${fmtG(+SH.left)}${SH.have ? ` · ในตะกร้าแล้ว ${kgTxt(SH.have)}` : ''} · สั่งได้ทีละ 0.5 kg</p>` : ''}`
     : `<div style="margin-top:16px;font-weight:600">จำนวนตัว</div>
       <div style="display:flex;align-items:center;gap:10px;margin-top:8px"><div class="stepper"><button onclick="SH.pcs=Math.max(1,SH.pcs-1);renderSheet()" aria-label="ลด">−</button><span class="num">${SH.pcs} ตัว</span><button onclick="SH.pcs=Math.min(50,SH.pcs+1);renderSheet()" aria-label="เพิ่ม">+</button></div>${est ? `<span class="note" style="margin:0">ตัวละประมาณ ${fmtG(est)}</span>` : ''}</div>`}
-    <div class="pc-row" style="margin-top:14px"><span style="flex:1;color:var(--ink-2)">${kind === 'kg' ? `${kgTxt(SH.kg)} × ${baht(price)}` : `${SH.pcs} ตัว × น้ำหนักจริง × ${baht(price)}/kg`}</span><b class="num" style="font-size:18px">${kind === 'pcs' ? (est ? '≈ ' + baht(total) : 'คิดตามน้ำหนักจริง') : baht(total)}</b></div>
-    <p class="note" style="text-align:left;margin:8px 0 0">ราคาจริงคิดตามน้ำหนักที่ชั่งตอนแพ็ก</p>
-    <button class="cartbar" style="justify-content:center;margin-top:14px;border:0;cursor:pointer;font-size:16px" onclick="addFromSheet()">เพิ่มลงตะกร้า${kind === 'kg' || est ? ' · ' + (kind === 'pcs' ? '≈ ' : '') + baht(total) : ''}</button></div>`;
+    ${kind === 'kg' && SH.room < KG_MIN ? '' : `<div class="pc-row" style="margin-top:14px"><span style="flex:1;color:var(--ink-2)">${kind === 'kg' ? `${kgTxt(SH.kg)} × ${baht(price)}` : `${SH.pcs} ตัว × น้ำหนักจริง × ${baht(price)}/kg`}</span><b class="num" style="font-size:18px">${kind === 'pcs' ? (est ? '≈ ' + baht(total) : 'คิดตามน้ำหนักจริง') : baht(total)}</b></div>
+    <p class="note" style="text-align:left;margin:8px 0 0">ราคาจริงคิดตามน้ำหนักที่ชั่งตอนแพ็ก</p>`}
+    ${kind === 'kg' && SH.room < KG_MIN ? `<div class="notice" style="margin-top:14px">${SH.have ? 'ในตะกร้ามีครบจำนวนที่เหลือแล้ว' : 'ของเหลือไม่ถึง 0.5 kg'} · ต้องการเพิ่มทักแอดมินทาง LINE ได้เลยค่ะ</div>` : `<button class="cartbar" style="justify-content:center;margin-top:14px;border:0;cursor:pointer;font-size:16px" onclick="addFromSheet()">เพิ่มลงตะกร้า${kind === 'kg' || est ? ' · ' + (kind === 'pcs' ? '≈ ' : '') + baht(total) : ''}</button>`}</div>`;
 }
 function closeSheet() { $('#shov')?.remove(); document.body.style.overflow = ''; SH = null; }
 function addFromSheet() {
+  if (SH.kind === 'pack' && SH.room < 1) return; if (SH.kind === 'kg' && SH.room < KG_MIN) return;
   if (SH.kind === 'pack') { const {p, mm, pk} = SH, same = CART.find(it => it.kind === 'pack' && it.slug === p.slug && it.pack_id === pk.id);
-    if (same) same.packs = Math.min(50, same.packs + SH.packs);
+    if (same) same.packs = Math.min(capPk(same), same.packs + SH.packs);
     else CART.push({id:'c' + Date.now(), kind:'pack', slug:p.slug, product:p.name, method_id:mid(mm, methods(p).indexOf(mm)), method_name:mm.name, method_type:'PACK', pack_id:pk.id, pack_name:pk.name, pack_g:pk.g || 0, price:pk.price, packs:SH.packs});
     saveCart(); closeSheet(); toastMsg('เพิ่มลงตะกร้าแล้ว'); rerender(); return; }
   const {p, mm, s, kind} = SH, base = {slug:p.slug, product:p.name, method_id:mid(mm, methods(p).indexOf(mm)), method_name:mm.name, method_type:mm.type, size_id:s ? s.id : '', grade:s ? s.grade : '', price_kg:s ? s.price : mm.price};
   const same = CART.find(it => it.kind === kind && it.slug === base.slug && it.method_id === base.method_id && (it.size_id || '') === base.size_id);
-  if (kind === 'kg') { if (same) same.kg = Math.min(KG_MAX, r2(same.kg + SH.kg)); else CART.push({id:'c' + Date.now(), kind, ...base, kg:SH.kg}); }
+  if (kind === 'kg') { if (same) same.kg = Math.min(capKg(same), r2(same.kg + SH.kg)); else CART.push({id:'c' + Date.now(), kind, ...base, kg:SH.kg}); }
   else { if (same) same.pcs = Math.min(50, same.pcs + SH.pcs); else CART.push({id:'c' + Date.now(), kind, ...base, pcs:SH.pcs, est_g:p.avg_piece_g || 0}); }
   saveCart(); closeSheet(); toastMsg('เพิ่มลงตะกร้าแล้ว'); rerender();
 }
@@ -337,7 +357,8 @@ function addPiece(slug, k) {
   saveCart(); toastMsg('เพิ่มลงตะกร้าแล้ว'); rerender();
 }
 function changeQty(id, d) { const it = CART.find(z => z.id === id); if (!it) return;
-  if (it.kind === 'kg') it.kg = Math.min(KG_MAX, Math.max(KG_MIN, r2(it.kg + d * KG_STEP))); else if (it.kind === 'pcs') it.pcs = Math.min(50, Math.max(1, it.pcs + d)); else if (it.kind === 'pack') it.packs = Math.min(50, Math.max(1, it.packs + d));
+  if (d > 0 && ((it.kind === 'kg' && it.kg + KG_STEP > capKg(it)) || (it.kind === 'pack' && it.packs + 1 > capPk(it)))) return toastMsg('สั่งได้สูงสุดตามสินค้าที่เหลือ');
+  if (it.kind === 'kg') it.kg = Math.min(capKg(it), Math.max(KG_MIN, r2(it.kg + d * KG_STEP))); else if (it.kind === 'pcs') it.pcs = Math.min(50, Math.max(1, it.pcs + d)); else if (it.kind === 'pack') it.packs = Math.min(capPk(it), Math.max(1, it.packs + d));
   saveCart(); rerender(); }
 function removeItem(id) { CART = CART.filter(z => z.id !== id); saveCart(); rerender(); }
 function clearCart() { if (!confirm('ล้างรายการทั้งหมดในตะกร้า?')) return; CART = []; saveCart(); rerender(); }
@@ -347,7 +368,7 @@ function orderMessage() {
   const L = CART.map((it, i) => `${i + 1}) ${it.product} · ${itemLabel(it)}${it.kind === 'kg' ? ` · ${kgTxt(it.kg)} × ${baht(it.price_kg)}` : it.kind === 'pack' ? ` · ${it.packs} แพ็ค × ${baht(it.price)}` : it.kind === 'pcs' ? ` · ${it.pcs} ตัว (${baht(it.price_kg)}/kg)` : ''} = ${it.kind === 'pcs' && !it.est_g ? 'ตามน้ำหนักจริง' : (it.kind === 'pcs' ? '≈ ' : '') + baht(lineTotal(it))}`);
   const fee = +((CAT && CAT.meta) || {}).shipping_fee || 0;   // ค่าส่งจาก Settings หลังบ้าน
   return ['สนใจและต้องการสั่งซื้อสินค้า ตามรายการดังนี้', '', L.join('\n\n'), '', `ยอดสินค้า ${cartHasEst() ? '≈ ' : ''}${baht(cartTotal())} (${CART.length} รายการ)`,
-    fee > 0 ? `ค่าจัดส่ง ${fee.toLocaleString('th-TH')} บาท ทั่วประเทศ` : '', fee > 0 ? `ยอดรวมทั้งหมด (รวมค่าส่ง) ${cartHasEst() ? '≈ ' : ''}${baht(r2(cartTotal() + fee))}` : '', 'รบกวนรอทางแอดมินตอบกลับเพื่อยืนยันออเดอร์อีกครั้ง'].filter((x, i, a) => x !== '' || (i > 0 && a[i - 1] !== '')).join('\n');
+    fee > 0 ? `ค่าจัดส่ง ${fee.toLocaleString('th-TH')} บาท ทั่วประเทศ` : '', fee > 0 ? `ยอดรวมทั้งหมด (รวมค่าส่ง) ${cartHasEst() ? '≈ ' : ''}${baht(r2(cartTotal() + fee))}` : '', '', 'รบกวนรอทางแอดมินตอบกลับเพื่อยืนยันออเดอร์อีกครั้ง'].filter((x, i, a) => x !== '' || (i > 0 && a[i - 1] !== '')).join('\n');
 }
 function cartBar() { return CART.length ? `<a class="cartbar" href="?cart=1" data-nav><span>🛒 ${CART.length} รายการ · ${cartHasEst() ? '≈ ' : ''}${baht(cartTotal())}</span><span class="grow"></span><span>ดูตะกร้า ›</span></a>` : ''; }
 let TOAST_T = null;
@@ -413,13 +434,13 @@ function vDetail(slug) {
       <h1>${esc(p.name)}</h1>${p.size ? `<div class="sz">${esc(p.size)}</div>` : ''}${gradeHtml(p) ? `<div class="sz">${gradeHtml(p)}</div>` : ''}
       <span class="pill ${esc(p.status)}">${ST[p.status] || ''}</span>
       <div class="box"><h3>วิธีขาย · ราคาปลีก</h3><div class="pieces">${(methods(p).length ? methods(p) : [{name:'ราคาปลีก', type:'WEIGHT', price:p.retail_price}]).map(mm => { const ss = Object.values(mm.sizes || {});
-        if (mm.type === 'PACK') return `<div class="small" style="color:var(--ink-2);font-weight:600;margin-top:4px">${MT.PACK}${mm.name && mm.name !== 'ขายเป็นแพ็ค' ? ' · ' + esc(mm.name) : ''}</div>${packsOfM(mm).map(k => `<div class="pc-row" style="flex-wrap:wrap"><span style="flex:1;min-width:130px"><b>${esc(k.name)}</b><div class="small" style="color:var(--ink-3)">${k.g ? fmtG(k.g) + ' / แพ็ค' : ''}</div><div class="small"><span class="pill ${esc(k.status)}" style="margin:2px 0 0;font-size:11.5px;padding:1px 8px">${ST[k.status] || ''}</span></div></span><span class="pp num" style="flex:none">${baht(k.price)}<small style="color:var(--ink-3);font-weight:400"> / แพ็ค</small></span>${k.status !== 'soldout' ? `<button class="addbtn" onclick="openSheet('${esc(p.slug)}','${esc(mid(mm, methods(p).indexOf(mm)))}','${esc(k.id || '')}')">เลือกสินค้า</button>` : ''}</div>`).join('')}`;
+        if (mm.type === 'PACK') return `<div class="small" style="color:var(--ink-2);font-weight:600;margin-top:4px">${MT.PACK}${mm.name && mm.name !== 'ขายเป็นแพ็ค' ? ' · ' + esc(mm.name) : ''}</div>${packsOfM(mm).map(k => `<div class="pc-row" style="flex-wrap:wrap"><span style="flex:1;min-width:130px"><b>${esc(k.name)}</b><div class="small" style="color:var(--ink-3)">${k.g ? fmtG(k.g) + ' / แพ็ค' : ''}</div><div class="small"><span class="pill ${esc(k.status)}" style="margin:2px 0 0;font-size:11.5px;padding:1px 8px">${ST[k.status] || ''}</span>${k.status !== 'soldout' ? leftHtml(k.avail, 'แพ็ค') : ''}</div></span><span class="pp num" style="flex:none">${baht(k.price)}<small style="color:var(--ink-3);font-weight:400"> / แพ็ค</small></span>${k.status !== 'soldout' ? `<button class="addbtn" onclick="openSheet('${esc(p.slug)}','${esc(mid(mm, methods(p).indexOf(mm)))}','${esc(k.id || '')}')">เลือกสินค้า</button>` : ''}</div>`).join('')}`;
         if (ss.length) return `<div class="small" style="color:var(--ink-2);font-weight:600;margin-top:4px">${MT[mm.type] || ''} ${mm.name && mm.name !== 'ตามไซซ์' ? '· ' + esc(mm.name) : ''}</div>${ss.map(s => { const u = lineUrl(MSG_SIZE(p, mm, s));
-          return `<div class="pc-row" style="flex-wrap:wrap"><span style="flex:1;min-width:130px"><b>${esc(s.grade)}</b><div class="small"><span class="pill ${esc(s.status)}" style="margin:2px 0 0;font-size:11.5px;padding:1px 8px">${ST[s.status] || ''}</span></div></span><span class="pp num" style="flex:none">${baht(s.price)}<small style="color:var(--ink-3);font-weight:400"> / kg</small></span>${s.status !== 'soldout' ? `<button class="addbtn" onclick="openSheet('${esc(p.slug)}','${esc(mid(mm, methods(p).indexOf(mm)))}','${esc(s.id || '')}')">เลือกสินค้า</button>` : ''}</div>`; }).join('')}`;
+          return `<div class="pc-row" style="flex-wrap:wrap"><span style="flex:1;min-width:130px"><b>${esc(s.grade)}</b><div class="small"><span class="pill ${esc(s.status)}" style="margin:2px 0 0;font-size:11.5px;padding:1px 8px">${ST[s.status] || ''}</span>${s.status !== 'soldout' ? leftHtml(s.avail_g) : ''}</div></span><span class="pp num" style="flex:none">${baht(s.price)}<small style="color:var(--ink-3);font-weight:400"> / kg</small></span>${s.status !== 'soldout' ? `<button class="addbtn" onclick="openSheet('${esc(p.slug)}','${esc(mid(mm, methods(p).indexOf(mm)))}','${esc(s.id || '')}')">เลือกสินค้า</button>` : ''}</div>`; }).join('')}`;
         const sized = new Set(methods(p).flatMap(x => Object.values(x.sizes || {}).map(s => s.grade)));   // ไซซ์ที่ขายในกล่อง "ตามไซซ์" แล้ว ไม่แสดงซ้ำ
         const u = lineUrl(MSG_METHOD(p, mm)), gs = mm.type === 'WEIGHT' ? (grades(p).length ? grades(p) : (p.size ? [p.size] : [])).filter(g => !sized.has(g)) : [];
         const fishHere = mm.type === 'WEIGHT' && pieces(p).length && p.pieces_by === mm.name;
-        return `<div class="pc-row" style="flex-wrap:wrap"><span style="flex:1;min-width:150px"><b>${esc(mm.name)}</b><div class="small" style="color:var(--ink-3)">${MT[mm.type] || ''}</div>${gs.length ? `<div class="small" style="margin-top:4px;color:var(--ink-2)">ไซซ์ที่มีตอนนี้: ${gs.map(g => `<span class="gchip">${esc(g)}</span>`).join(' ')}</div>` : ''}${fishHere ? `<div class="small" style="margin-top:4px;color:var(--green);font-weight:600">🐟 มีปลาชั่งรายตัว ${pieces(p).length} ตัว ให้เลือกด้านล่าง</div>` : ''}</span><span class="pp num" style="flex:none">${baht(mm.price)}<small style="color:var(--ink-3);font-weight:400"> / kg</small></span>${p.status === 'soldout' ? '' : mm.type === 'PIECE_ACTUAL_WEIGHT' && pieces(p).length ? `<button class="addbtn" onclick="document.getElementById('fishbox').scrollIntoView({behavior:'smooth',block:'start'})">เลือกตัว ↓</button>` : `<button class="addbtn" onclick="openSheet('${esc(p.slug)}','${esc(mid(mm, methods(p).indexOf(mm)))}','')">เลือกสินค้า</button>`}</div>`; }).join('')}</div>
+        return `<div class="pc-row" style="flex-wrap:wrap"><span style="flex:1;min-width:150px"><b>${esc(mm.name)}</b><div class="small" style="color:var(--ink-3)">${MT[mm.type] || ''}${p.status !== 'soldout' ? leftHtml(mm.avail_g) : ''}</div>${gs.length ? `<div class="small" style="margin-top:4px;color:var(--ink-2)">ไซซ์ที่มีตอนนี้: ${gs.map(g => `<span class="gchip">${esc(g)}</span>`).join(' ')}</div>` : ''}${fishHere ? `<div class="small" style="margin-top:4px;color:var(--green);font-weight:600">🐟 มีปลาชั่งรายตัว ${pieces(p).length} ตัว ให้เลือกด้านล่าง</div>` : ''}</span><span class="pp num" style="flex:none">${baht(mm.price)}<small style="color:var(--ink-3);font-weight:400"> / kg</small></span>${p.status === 'soldout' ? '' : mm.type === 'PIECE_ACTUAL_WEIGHT' && pieces(p).length ? `<button class="addbtn" onclick="document.getElementById('fishbox').scrollIntoView({behavior:'smooth',block:'start'})">เลือกตัว ↓</button>` : `<button class="addbtn" onclick="openSheet('${esc(p.slug)}','${esc(mid(mm, methods(p).indexOf(mm)))}','')">เลือกสินค้า</button>`}</div>`; }).join('')}</div>
         ${avgHtml(p) ? `<div class="avgw" style="margin-top:8px">${avgHtml(p)}</div>` : ''}<div class="note" style="text-align:left;margin-top:8px">${methods(p).some(x => x.type === 'PACK') ? (methods(p).every(x => x.type === 'PACK') ? 'ราคาคงที่ต่อแพ็ค' : 'แบบแพ็คราคาคงที่ต่อแพ็ค · แบบอื่นคิดตามน้ำหนักจริง') : 'ราคาคิดตามน้ำหนักจริง'} · ต้องการซื้อจำนวนมาก กด “🏷️ ขอราคาส่ง” เพื่อสอบถามทาง LINE</div></div>
       ${pieces(p).length ? `<div class="box" id="fishbox" style="scroll-margin-top:90px"><h3>🐟 เลือกตัวได้ (${pieces(p).length} ตัว)</h3><p class="note" style="text-align:left;margin:0 0 10px">ชั่งไว้แล้ว · ราคาต่อตัว = น้ำหนักจริง × ราคา${esc(p.pieces_by || 'ขายเป็นตัว')} ${(() => { const mm = methods(p).find(x => x.name === p.pieces_by); return mm ? baht(mm.price) + '/kg' : ''; })()}</p><div class="pieces">${pieces(p).map(x => `<div class="pc-row"><span class="w num">${fmtG(x.g)}${x.grade && grades(p).length > 0 ? `<div style="font-weight:400;font-size:12px;color:var(--ink-3)">${esc(x.grade)}</div>` : ''}</span><span class="pp num">${baht(x.price)}</span>${x.k ? (inCart(x.k) ? '<span class="chosen">✓ เลือกแล้ว</span>' : `<button class="addbtn pri" onclick="addPiece('${esc(p.slug)}','${esc(x.k)}')">เพิ่มลงตะกร้า</button>`) : ''}</div>`).join('')}</div></div>` : ''}
       ${p.description ? `<div class="box"><h3>รายละเอียด</h3><div class="pre">${esc(p.description)}</div></div>` : ''}

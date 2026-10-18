@@ -2465,6 +2465,12 @@ function sizeStatus(p, grade) {   // สถานะของไซซ์ = ข�
   const q = tracksPcs(p) ? countSellable(p.id, null, grade).g : gradeAvail(p.id, grade), t = catThresholds(p);
   return q < t.min ? 'soldout' : q <= t.low ? 'low' : 'available';
 }
+/* ยอดที่ลูกค้าสั่งได้ (กรัม) สำหรับเมนู · null = ไม่จำกัด (ไม่ติดตามสต็อก / ตั้งสถานะเอง) */
+function catAvailG(p, grade) {
+  if ((p.catalog_status || 'auto') !== 'auto' || !stockOn(p)) return null;
+  const q = grade ? (tracksPcs(p) ? countSellable(p.id, null, grade).g : gradeAvail(p.id, grade)) : (tracksPcs(p) ? countSellable(p.id).g : stockOf(p.id).sell.LINE);
+  return Math.max(0, Math.round(q));
+}
 function lastReceived(pid) { let d = null; DB.stock_lots.forEach(l => { if (l.product_id === pid && (!d || l.received_at > d)) d = l.received_at; }); return d; }
 /* allowlist: สร้าง object ใหม่ทีละ field — ไม่มีการคัดลอก product ทั้งก้อน · ราคาเปิดเฉพาะ retail_price */
 function catalogProduct(p, i) {
@@ -2481,10 +2487,10 @@ function catalogProduct(p, i) {
     featured:!!p.catalog_featured, status:catalogStatus(p), last_received:lastReceived(p.id) || '', image_v:img, sort:i,
     ...(packPrices.length ? {pack_price:Math.min(...packPrices)} : {}),
     methods:ms.map(m => m.type === 'PACK'   // 📦 ราคาคงที่ต่อแพ็ค + สถานะของแต่ละแพ็ค
-      ? {id:String(m.id), name:String(m.name || ''), type:'PACK', price:Math.min(...shownPacks(m).map(s => +s.price)), packs:shownPacks(m).map(s => ({id:String(s.id), name:String(s.name), g:Math.round(+s.g), price:Math.round(+s.price * 100) / 100, status:packStatus(p, s.id)}))}
+      ? {id:String(m.id), name:String(m.name || ''), type:'PACK', price:Math.min(...shownPacks(m).map(s => +s.price)), packs:shownPacks(m).map(s => ({id:String(s.id), name:String(s.name), g:Math.round(+s.g), price:Math.round(+s.price * 100) / 100, status:packStatus(p, s.id), ...(catAvailG(p) != null ? {avail:packStock(p.id, s.id).avail} : {})}))}
       : sizesOf(m).length   // ราคาปลีกของแต่ละวิธีขาย / แต่ละไซซ์เท่านั้น (ไม่มีราคาส่ง) · ไซซ์มีสถานะของตัวเอง
-      ? {id:String(m.id), name:String(m.name || ''), type:m.type, price:Math.min(...shownSizes(m).map(s => +s.price)), sizes:shownSizes(m).map(s => ({id:String(s.id), grade:String(s.grade), price:Math.round(+s.price * 100) / 100, status:sizeStatus(p, s.grade)}))}
-      : {id:String(m.id), name:String(m.name || ''), type:m.type, price:Math.round(+m.price * 100) / 100})};   // id = รหัสอ้างอิงสำหรับตะกร้า/Order Request (ไม่ใช่ข้อมูลภายใน)
+      ? {id:String(m.id), name:String(m.name || ''), type:m.type, price:Math.min(...shownSizes(m).map(s => +s.price)), sizes:shownSizes(m).map(s => ({id:String(s.id), grade:String(s.grade), price:Math.round(+s.price * 100) / 100, status:sizeStatus(p, s.grade), ...(catAvailG(p, s.grade) != null ? {avail_g:catAvailG(p, s.grade)} : {})}))}
+      : {id:String(m.id), name:String(m.name || ''), type:m.type, price:Math.round(+m.price * 100) / 100, ...(m.type === 'WEIGHT' && catAvailG(p) != null ? {avail_g:catAvailG(p)} : {})})};   // id = รหัสอ้างอิงสำหรับตะกร้า/Order Request (ไม่ใช่ข้อมูลภายใน)
   const pm = ms.find(m => m.type === 'PIECE_ACTUAL_WEIGHT') || ms.find(m => m.type === 'WEIGHT');   // ปลาที่ชั่งรายตัว: ราคาตามวิธี "ขายเป็นตัว" (ถ้าไม่มี ใช้ "ตามน้ำหนัก")
   if (pm) { o.pieces_by = String(pm.name || ''); o.pieces_by_id = String(pm.id); }
   if (pm && tracksPcs(p) && stockOn(p))   // ปลารายตัวที่ชั่งไว้และยังว่าง: น้ำหนัก + ราคา (ไม่มีรหัส Lot/ต้นทุน)
